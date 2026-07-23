@@ -108,10 +108,11 @@ See the normative [V1 model-package ABI](docs/model_package_abi.md) and the
 validate, inspect, and bit-accurately execute relocatable V1 packages; runtime
 RTL now retains two complete metadata banks and atomically activates validated
 model generations. A generalized controller now consumes the active metadata
-view and executes one to eight mixed 1x1/3x3 layers through a temporary
-parameter-provider interface. The next milestone is replacing that temporary
-boundary with reusable active and prefetch parameter banks before integrating
-the programmable path into the board-facing DMA system.
+view and executes one to eight mixed 1x1/3x3 layers. Two reusable,
+scratchpad-backed parameter banks now enforce exact lengths and ABI CRC32,
+retain layer-tagged bias/quantization state, and overlap prefetch with compute.
+The next milestone is the packed, versioned DMA protocol that connects this
+programmable path to the board-facing stream system.
 
 The control plane also exposes versioned
 [capability discovery and structured errors](docs/capability_and_errors.md).
@@ -400,6 +401,7 @@ record.
 | [Register map](docs/register_map.md) | AXI-Lite software interface |
 | [Runtime model lifecycle](docs/runtime_model_lifecycle.md) | Dual-bank metadata loading, validation, and atomic activation |
 | [Descriptor-driven execution](docs/descriptor_driven_execution.md) | Active-bank layer sequencing, semantic checks, parameter handshake, and RTL evidence |
+| [Runtime parameter banks](docs/runtime_parameter_banks.md) | Dual-bank loading, CRC validation, ownership, prefetch overlap, and integrated RTL evidence |
 | [Performance counters](docs/performance_counters.md) | Counter definitions and interpretation |
 | [Compute and bandwidth budget](docs/bandwidth_budget.md) | Tail efficiency and DDR roofline calculations |
 | [Verification matrix](docs/verification_matrix.md) | Coverage, evidence, and outstanding hardware tests |

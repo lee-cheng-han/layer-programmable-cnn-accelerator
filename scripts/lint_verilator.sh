@@ -41,6 +41,8 @@ verilator --lint-only \
  rtl/stream/tensor_packet_router.sv \
  rtl/runtime/cnn_metadata_word_ram.sv \
  rtl/runtime/cnn_model_metadata_store.sv \
+ rtl/runtime/cnn_runtime_parameter_banks.sv \
+ rtl/runtime/cnn_programmable_job_engine.sv \
  rtl/scheduler/denoise_layer_descriptor_rom.sv \
  rtl/scheduler/performance_counters.sv \
  rtl/compute/reduction_tree.sv \
@@ -81,5 +83,19 @@ verilator --lint-only \
  rtl/compute/tiled_conv3x3_engine.sv \
  rtl/scheduler/single_layer_scheduler.sv \
  rtl/scheduler/descriptor_driven_job_controller.sv
+
+verilator --lint-only \
+ -Wall \
+ -Wno-fatal \
+ -Wno-BLKLOOPINIT \
+ -Wno-BLKSEQ \
+ -Wno-DECLFILENAME \
+ -Wno-PINCONNECTEMPTY \
+ -Wno-UNUSEDSIGNAL \
+ -Wno-UNUSEDPARAM \
+ --top-module cnn_runtime_parameter_banks \
+ rtl/tensor/weight_scratchpad.sv \
+ rtl/tensor/ping_pong_weight_scratchpad.sv \
+ rtl/runtime/cnn_runtime_parameter_banks.sv
 
 echo "[PASS] Verilator lint completed"

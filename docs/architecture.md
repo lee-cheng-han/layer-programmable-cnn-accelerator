@@ -85,6 +85,8 @@ Input RGB tensor
 | `cnn_axi_lite_slave` | Software-visible registers, status, interrupts, diagnostics, and counters |
 | `cnn_model_metadata_store` | Dual-bank runtime descriptors, commit validation, and atomic model activation |
 | `descriptor_driven_job_controller` | Validates and sequences one to eight active runtime layer descriptors through the reusable scheduler |
+| `cnn_runtime_parameter_banks` | Validates, tags, owns, and overlaps two reusable weight/postprocessing banks |
+| `cnn_programmable_job_engine` | Connects descriptor-driven execution to scratchpad-backed runtime parameters |
 | `tensor_packet_router` | Validates and routes the seven-packet tensor input stream |
 | `stream_loaded_multi_layer_job_controller` | Loads tensors, overlaps parameter prefetch, and runs the 3-layer job |
 | `single_layer_scheduler` | Reuses 1x1/3x3 tiled engines across image positions |
@@ -95,9 +97,9 @@ Input RGB tensor
 
 The current board path uses `stream_loaded_multi_layer_job_controller`. The
 parallel layer-programmable path connects the active view from
-`cnn_model_metadata_store` to `descriptor_driven_job_controller` and has
-standalone golden RTL evidence. It becomes board-facing after Phase 6 adds
-runtime parameter banks and Phase 7 adds the packed DMA protocol.
+`cnn_model_metadata_store` through `cnn_programmable_job_engine` to two runtime
+parameter banks and has eight-layer golden RTL evidence. It becomes
+board-facing after Phase 7 adds the packed DMA protocol.
 
 ## Register Map
 

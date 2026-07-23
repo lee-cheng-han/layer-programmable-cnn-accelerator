@@ -82,6 +82,14 @@ jobs:
         run: |
           make descriptor-test
 
+      - name: Run runtime parameter-bank test
+        run: |
+          make parameter-bank-test
+
+      - name: Run programmable job-engine test
+        run: |
+          make programmable-engine-test
+
   docs:
     name: ci / docs · evidence consistency
     runs-on: ubuntu-24.04

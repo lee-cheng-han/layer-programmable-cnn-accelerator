@@ -51,12 +51,20 @@ module descriptor_driven_job_controller #(
   input  logic [7:0] descriptor_residual_mode,
 
   output logic parameter_request,
+  output logic parameter_release,
   input  logic parameter_ready,
+  input  logic parameter_use_scratchpad_weights,
   input  logic parameter_quant_enable,
   input  logic [4:0] parameter_quant_shift,
   input  logic signed [DATA_W-1:0] parameter_weights_1x1 [MAX_COUT][MAX_CIN],
   input  logic signed [DATA_W-1:0] parameter_weights_3x3 [MAX_COUT][MAX_CIN][9],
   input  logic signed [BIAS_W-1:0] parameter_bias [MAX_COUT],
+  output logic [COUNT_W-1:0] parameter_weight_read_k_base,
+  output logic [COUNT_W-1:0] parameter_weight_read_c_base,
+  output logic [3:0] parameter_weight_read_kernel_idx,
+  output logic [PK-1:0] parameter_weight_out_lane_mask,
+  output logic [PC-1:0] parameter_weight_in_lane_mask,
+  input  logic signed [DATA_W-1:0] parameter_weight_mat_data [PK][PC],
 
   input  logic signed [DATA_W-1:0] input_tensor [MAX_PIXELS*MAX_CIN],
   output logic signed [OUT_W-1:0] output_tensor [MAX_PIXELS*MAX_COUT],
@@ -133,12 +141,12 @@ module descriptor_driven_job_controller #(
   logic signed [DATA_W-1:0] scheduler_activation [MAX_PIXELS*MAX_CIN];
   logic signed [OUT_W-1:0] scheduler_output [MAX_PIXELS*MAX_COUT];
   logic signed [DATA_W-1:0] unused_scratch_activation [PC];
-  logic signed [DATA_W-1:0] unused_scratch_weight [PK][PC];
 
   assign descriptor_layer_index = layer_index;
   assign active_layer = layer_index;
   assign busy = (state != S_IDLE) && (state != S_DONE);
   assign parameter_request = state == S_WAIT_PARAMETER;
+  assign parameter_release = state == S_STORE_LAYER;
   assign scheduler_start = state == S_START_LAYER;
   assign descriptor_is_final = (4'(layer_index) + 4'd1) == layer_count_q;
 
@@ -243,11 +251,6 @@ module descriptor_driven_job_controller #(
     for (int lane = 0; lane < PC; lane++) begin
       unused_scratch_activation[lane] = '0;
     end
-    for (int out_lane = 0; out_lane < PK; out_lane++) begin
-      for (int in_lane = 0; in_lane < PC; in_lane++) begin
-        unused_scratch_weight[out_lane][in_lane] = '0;
-      end
-    end
   end
 
   function automatic logic signed [OUT_W-1:0] saturate_int8(
@@ -301,16 +304,17 @@ module descriptor_driven_job_controller #(
     .weights_3x3(parameter_weights_3x3),
     .bias(parameter_bias),
     .use_scratchpad_operands(1'b0),
+    .use_scratchpad_weights(parameter_use_scratchpad_weights),
     .scratch_activation_read_pixel(),
     .scratch_activation_read_c_base(),
     .scratch_activation_lane_mask(),
     .scratch_activation_lane_data(unused_scratch_activation),
-    .scratch_weight_read_k_base(),
-    .scratch_weight_read_c_base(),
-    .scratch_weight_read_kernel_idx(),
-    .scratch_weight_out_lane_mask(),
-    .scratch_weight_in_lane_mask(),
-    .scratch_weight_mat_data(unused_scratch_weight),
+    .scratch_weight_read_k_base(parameter_weight_read_k_base),
+    .scratch_weight_read_c_base(parameter_weight_read_c_base),
+    .scratch_weight_read_kernel_idx(parameter_weight_read_kernel_idx),
+    .scratch_weight_out_lane_mask(parameter_weight_out_lane_mask),
+    .scratch_weight_in_lane_mask(parameter_weight_in_lane_mask),
+    .scratch_weight_mat_data(parameter_weight_mat_data),
     .output_tensor(scheduler_output),
     .output_pixel_valid(),
     .output_pixel_ready(1'b1),

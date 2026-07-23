@@ -17,7 +17,7 @@ parameter banks and the packed DMA protocol are available.
 active metadata bank
   -> decoded layer and tensor view
   -> descriptor_driven_job_controller
-  -> temporary parameter request/ready interface
+  -> active/prefetch parameter-bank request/ready interface
   -> single_layer_scheduler
   -> alternating intermediate feature banks
   -> final signed INT8 tensor
@@ -47,16 +47,15 @@ signed INT8 plus or minus signed INT8 with saturation to signed INT8.
 
 ## Parameter Boundary
 
-`parameter_request` identifies the current layer through `active_layer`. A
-temporary software or test provider responds with `parameter_ready`, holds the
-selected weights and bias stable for the layer, and supplies the compatibility
-quantization shift. Parameter wait cycles naturally stall execution.
+`parameter_request` identifies the current layer through `active_layer`.
+Phase 6 now resolves that request against two valid, layer-tagged parameter
+banks. The selected bank holds weights, bias, and compatibility quantization
+controls stable until `parameter_release`. Parameter wait cycles naturally
+stall execution, allowing software or a future DMA prefetch engine to refill
+the other bank. See [runtime_parameter_banks.md](runtime_parameter_banks.md).
 
-This interface is intentionally the Phase 5 boundary. Phase 6 replaces the
-temporary provider with reusable active and prefetch weight/postprocessing
-banks, parameter length and checksum checks, and bank-swap control. Full
-per-output-channel multiplier/shift requantization remains the Phase 9 runtime
-postprocessing milestone.
+Full per-output-channel multiplier/shift requantization remains the Phase 9
+runtime postprocessing milestone.
 
 ## Verification
 
@@ -74,4 +73,3 @@ lifecycle, validates and activates it, and then checks:
 - an eight-layer identity network at the V1 layer-count limit
 - launch rejection without an active model
 - geometry rejection before any parameter request
-

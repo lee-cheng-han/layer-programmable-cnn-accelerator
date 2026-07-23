@@ -36,7 +36,8 @@ module weight_scratchpad #(
         (write_out_channel < COUNT_W'(MAX_COUT)) &&
         (write_in_channel < COUNT_W'(MAX_CIN)) &&
         (write_kernel_idx < 4'd9)) begin
-      mem[write_out_channel][write_in_channel][write_kernel_idx] <= write_data;
+      mem[int'(write_out_channel)][int'(write_in_channel)][int'(write_kernel_idx)] <=
+        write_data;
     end
   end
 
@@ -48,9 +49,9 @@ module weight_scratchpad #(
             ((read_k_base + COUNT_W'(pk)) < COUNT_W'(MAX_COUT)) &&
             ((read_c_base + COUNT_W'(pc)) < COUNT_W'(MAX_CIN)) &&
             (read_kernel_idx < 4'd9)) begin
-          weight_mat[pk][pc] = mem[read_k_base + COUNT_W'(pk)]
-                                  [read_c_base + COUNT_W'(pc)]
-                                  [read_kernel_idx];
+          weight_mat[pk][pc] = mem[int'(read_k_base) + pk]
+                                  [int'(read_c_base) + pc]
+                                  [int'(read_kernel_idx)];
         end else begin
           weight_mat[pk][pc] = '0;
         end
@@ -60,7 +61,9 @@ module weight_scratchpad #(
     if ((debug_out_channel < COUNT_W'(MAX_COUT)) &&
         (debug_in_channel < COUNT_W'(MAX_CIN)) &&
         (debug_kernel_idx < 4'd9)) begin
-      debug_read_data = mem[debug_out_channel][debug_in_channel][debug_kernel_idx];
+      debug_read_data = mem[int'(debug_out_channel)]
+                           [int'(debug_in_channel)]
+                           [int'(debug_kernel_idx)];
     end else begin
       debug_read_data = '0;
     end

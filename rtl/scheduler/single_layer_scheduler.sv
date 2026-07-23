@@ -41,6 +41,7 @@ module single_layer_scheduler #(
   input  logic signed [BIAS_W-1:0] bias [MAX_COUT],
 
   input  logic use_scratchpad_operands,
+  input  logic use_scratchpad_weights,
   output logic [ADDR_W-1:0] scratch_activation_read_pixel,
   output logic [COUNT_W-1:0] scratch_activation_read_c_base,
   output logic [PC-1:0] scratch_activation_lane_mask,
@@ -191,6 +192,7 @@ module single_layer_scheduler #(
     .weights(weights_1x1),
     .bias(bias),
     .use_scratchpad_operands(use_scratchpad_operands),
+    .use_scratchpad_weights(use_scratchpad_weights),
     .scratch_activation_pixel(input_pixel_index_1x1),
     .scratch_activation_read_pixel(scratch_activation_read_pixel_1x1),
     .scratch_activation_read_c_base(scratch_activation_read_c_base_1x1),
@@ -241,6 +243,7 @@ module single_layer_scheduler #(
     .weights(weights_3x3),
     .bias(bias),
     .use_scratchpad_operands(use_scratchpad_operands),
+    .use_scratchpad_weights(use_scratchpad_weights),
     .scratch_activation_read_pixel(scratch_activation_read_pixel_3x3),
     .scratch_activation_read_c_base(scratch_activation_read_c_base_3x3),
     .scratch_activation_lane_mask(scratch_activation_lane_mask_3x3),

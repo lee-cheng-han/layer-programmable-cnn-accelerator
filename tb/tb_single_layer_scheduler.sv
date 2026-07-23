@@ -91,6 +91,7 @@ module tb_single_layer_scheduler;
  .weights_3x3(weights_3x3),
  .bias(bias),
  .use_scratchpad_operands(use_scratchpad_operands),
+ .use_scratchpad_weights(use_scratchpad_operands),
  .scratch_activation_read_pixel(scratch_activation_read_pixel),
  .scratch_activation_read_c_base(scratch_activation_read_c_base),
  .scratch_activation_lane_mask(scratch_activation_lane_mask),

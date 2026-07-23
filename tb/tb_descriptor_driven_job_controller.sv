@@ -59,12 +59,14 @@ module tb_descriptor_driven_job_controller;
   logic [7:0] descriptor_residual_mode;
 
   logic parameter_request;
+  logic parameter_release;
   logic parameter_ready;
   logic parameter_quant_enable;
   logic [4:0] parameter_quant_shift;
   logic signed [7:0] parameter_weights_1x1 [MAX_COUT][MAX_CIN];
   logic signed [7:0] parameter_weights_3x3 [MAX_COUT][MAX_CIN][9];
   logic signed [31:0] parameter_bias [MAX_COUT];
+  logic signed [7:0] parameter_weight_mat_data [PK][PC];
   logic signed [7:0] input_tensor [MAX_PIXELS*MAX_CIN];
   logic signed [7:0] output_tensor [MAX_PIXELS*MAX_COUT];
   logic [2:0] active_layer;
@@ -185,12 +187,20 @@ module tb_descriptor_driven_job_controller;
     .descriptor_activation(descriptor_activation),
     .descriptor_residual_mode(descriptor_residual_mode),
     .parameter_request(parameter_request),
+    .parameter_release(parameter_release),
     .parameter_ready(parameter_ready),
+    .parameter_use_scratchpad_weights(1'b0),
     .parameter_quant_enable(parameter_quant_enable),
     .parameter_quant_shift(parameter_quant_shift),
     .parameter_weights_1x1(parameter_weights_1x1),
     .parameter_weights_3x3(parameter_weights_3x3),
     .parameter_bias(parameter_bias),
+    .parameter_weight_read_k_base(),
+    .parameter_weight_read_c_base(),
+    .parameter_weight_read_kernel_idx(),
+    .parameter_weight_out_lane_mask(),
+    .parameter_weight_in_lane_mask(),
+    .parameter_weight_mat_data(parameter_weight_mat_data),
     .input_tensor(input_tensor),
     .output_tensor(output_tensor),
     .active_layer(active_layer),
@@ -216,6 +226,11 @@ module tb_descriptor_driven_job_controller;
         for (int k = 0; k < 9; k++) begin
           parameter_weights_3x3[co][ci][k] = '0;
         end
+      end
+    end
+    for (int pk = 0; pk < PK; pk++) begin
+      for (int pc = 0; pc < PC; pc++) begin
+        parameter_weight_mat_data[pk][pc] = '0;
       end
     end
 

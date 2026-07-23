@@ -18,8 +18,8 @@ atomically activated, and reused across multiple images.
 | 3 | Add capability discovery and structured errors | Complete |
 | 4 | Add runtime metadata memories and atomic model lifecycle | Complete |
 | 5 | Generalize descriptor-driven layer execution control | Complete |
-| 6 | Add reusable active/prefetch parameter banks | Next |
-| 7 | Introduce packed, versioned DMA protocol | Planned |
+| 6 | Add reusable active/prefetch parameter banks | Complete |
+| 7 | Introduce packed, versioned DMA protocol | Next |
 | 8 | Implement DDR-backed spatial tiling and halo handling | Planned |
 | 9 | Complete residual and quantization behavior in runtime RTL | Planned |
 | 10 | Build runtime software and connect interrupts | Planned |
@@ -50,6 +50,13 @@ checks geometry, tensor chaining, supported operations, final-layer flags, and
 residual compatibility before requesting parameters. The temporary
 request/ready parameter boundary is documented in
 [descriptor_driven_execution.md](descriptor_driven_execution.md).
+
+Phase 6 now provides two layer-tagged weight/postprocessing banks with exact
+length validation, ABI-compatible CRC32, compute ownership, release, and
+overlapped prefetch. `cnn_programmable_job_engine` connects the banked weight
+read path directly to the descriptor controller and proves an eight-layer job
+while recycling only two banks. See
+[runtime_parameter_banks.md](runtime_parameter_banks.md).
 
 ## Final Workflow
 

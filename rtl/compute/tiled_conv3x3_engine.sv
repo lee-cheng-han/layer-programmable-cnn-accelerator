@@ -38,6 +38,7 @@ module tiled_conv3x3_engine #(
   input  logic signed [BIAS_W-1:0] bias [MAX_COUT],
 
   input  logic use_scratchpad_operands,
+  input  logic use_scratchpad_weights,
   output logic [ADDR_W-1:0] scratch_activation_read_pixel,
   output logic [COUNT_W-1:0] scratch_activation_read_c_base,
   output logic [PC-1:0] scratch_activation_lane_mask,
@@ -216,7 +217,7 @@ module tiled_conv3x3_engine #(
 
     for (int pk = 0; pk < PK; pk++) begin
       for (int pc = 0; pc < PC; pc++) begin
-        operand_weight_mat[pk][pc] = use_scratchpad_operands ?
+        operand_weight_mat[pk][pc] = use_scratchpad_weights ?
                                      scratch_weight_mat_data[pk][pc] :
                                      mac_weight_mat_comb[pk][pc];
       end

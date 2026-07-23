@@ -49,6 +49,9 @@ Expected RTL coverage includes:
 - active-bank descriptor decode and one-to-eight-layer execution sequencing
 - descriptor geometry, tensor-chain, operation, and residual compatibility rejection
 - temporary parameter-provider backpressure between runtime layers
+- exact parameter length and CRC32 validation before bank visibility
+- layer-tagged parameter acquire/release and active/prefetch overlap
+- eight-layer execution while recycling two scratchpad-backed parameter banks
 - output backpressure
 - per-layer, DMA-stall, and saturation performance counter snapshots
 
@@ -94,6 +97,7 @@ Passing criteria:
 | golden RTL tests | Passing |
 | unit RTL tests | Passing |
 | descriptor-driven controller test | Passing |
+| runtime parameter-bank tests | Passing |
 | Zynq block design | Passing |
 | implementation | Passing |
 | Timing | Met at 125 MHz |

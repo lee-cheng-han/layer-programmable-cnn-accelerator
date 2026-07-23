@@ -56,6 +56,8 @@ set rtl_files [list \
  rtl/stream/tensor_packet_router.sv \
 	rtl/runtime/cnn_metadata_word_ram.sv \
 	rtl/runtime/cnn_model_metadata_store.sv \
+	rtl/runtime/cnn_runtime_parameter_banks.sv \
+	rtl/runtime/cnn_programmable_job_engine.sv \
  rtl/scheduler/denoise_layer_descriptor_rom.sv \
  rtl/scheduler/performance_counters.sv \
  rtl/compute/reduction_tree.sv \
