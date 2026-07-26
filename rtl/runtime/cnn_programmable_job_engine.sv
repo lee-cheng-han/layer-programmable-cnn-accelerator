@@ -120,6 +120,7 @@ module cnn_programmable_job_engine #(
     .rst_n(rst_n),
     .clear_error(parameter_clear_error),
     .load_start(parameter_load_start),
+    .load_abort(1'b0),
     .load_ready(parameter_load_ready),
     .load_layer_id(parameter_load_layer_id),
     .load_kernel_size(parameter_load_kernel_size),

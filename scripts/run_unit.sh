@@ -18,6 +18,9 @@ TESTS=(
  tb_descriptor_driven_job_controller
  tb_runtime_parameter_banks
  tb_programmable_job_engine
+ tb_packed_dma_packet_parser
+ tb_packed_dma_runtime_router
+ tb_packed_dma_packet_writer
  tb_single_layer_scheduler
  tb_multi_layer_job_controller
  tb_stream_loaded_multi_layer_job_controller

@@ -271,18 +271,19 @@ UNLOADED
 
 Staging and active metadata are distinct. Failed loading or validation does not
 damage the active model. `RUN_IMAGE` accepts only an active, validated model,
-and V1 rejects activation while a job is busy. The current fixed scheduler does
-not consume the active descriptors yet; that handoff is Phase 5. Exact register
-commands and the Phase 4 validation boundary are specified in
+and V1 rejects activation while a job is busy. The descriptor-driven runtime
+consumes the active metadata view, while the preserved board wrapper still uses
+the fixed scheduler. Exact register commands and the validation boundary are specified in
 [runtime_model_lifecycle.md](runtime_model_lifecycle.md).
 
-## Intentionally Deferred Wire Protocol
+## Packed Wire Protocol
 
-This ABI does not freeze the AXI-Stream packet header used for packed DMA tile
-transfers. That protocol is Phase 7 because it also needs packet type, tensor
-ID, tile coordinates, exact payload length, `TKEEP`, `TLAST`, and malformed
-packet recovery. Its payload byte order is already constrained: bits `7:0`
-carry the earliest tensor byte, followed by bits `15:8`, `23:16`, and `31:24`.
+The model-package ABI and AXI-Stream framing remain separately versioned. The
+implemented packed DMA protocol carries packet type, tensor ID, tile
+coordinates, exact payload length, `TKEEP`, `TLAST`, and malformed-packet
+recovery. Bits `7:0` carry the earliest tensor byte, followed by bits `15:8`,
+`23:16`, and `31:24`. See
+[packed_dma_protocol.md](packed_dma_protocol.md) for the normative wire format.
 
 ## Verification
 

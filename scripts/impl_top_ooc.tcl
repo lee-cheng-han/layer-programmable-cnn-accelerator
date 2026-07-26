@@ -108,6 +108,7 @@ proc utilization_over_limit_messages {path} {
 }
 
 set sources [list \
+ rtl/include/cnn_dma_packet_pkg.sv \
  rtl/include/cnn_accel_abi_pkg.sv \
  rtl/scheduler/tail_mask_generator.sv \
  rtl/postprocess/parallel_bias_add.sv \
@@ -127,6 +128,9 @@ set sources [list \
  rtl/tensor/weight_tensor_load_controller.sv \
  rtl/tensor/output_tensor_store_controller.sv \
  rtl/stream/tensor_packet_router.sv \
+ rtl/stream/packed_dma_packet_parser.sv \
+ rtl/stream/packed_dma_runtime_router.sv \
+ rtl/stream/packed_dma_packet_writer.sv \
  rtl/runtime/cnn_metadata_word_ram.sv \
  rtl/runtime/cnn_model_metadata_store.sv \
  rtl/runtime/cnn_runtime_parameter_banks.sv \

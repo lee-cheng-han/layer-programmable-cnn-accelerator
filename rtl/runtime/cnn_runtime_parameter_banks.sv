@@ -16,6 +16,7 @@ module cnn_runtime_parameter_banks #(
   input  logic clear_error,
 
   input  logic load_start,
+  input  logic load_abort,
   output logic load_ready,
   input  logic [2:0] load_layer_id,
   input  logic [1:0] load_kernel_size,
@@ -290,7 +291,13 @@ module cnn_runtime_parameter_banks #(
         end
       end
 
-      case (load_state)
+      if (load_abort && (load_state != S_IDLE)) begin
+        load_state <= S_IDLE;
+        bank_valid[load_bank] <= 1'b0;
+        load_done <= 1'b1;
+        error <= 1'b1;
+        error_code <= PARAMETER_BAD_CONFIG;
+      end else case (load_state)
         S_IDLE: begin
           if (load_start) begin
             if (!load_ready) begin

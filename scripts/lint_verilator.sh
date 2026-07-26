@@ -19,6 +19,7 @@ verilator --lint-only \
  -Wno-UNUSEDSIGNAL \
  -Wno-UNUSEDPARAM \
  --top-module cnn_image2image_system_top \
+ rtl/include/cnn_dma_packet_pkg.sv \
  rtl/include/cnn_accel_abi_pkg.sv \
  rtl/scheduler/tail_mask_generator.sv \
  rtl/postprocess/parallel_bias_add.sv \
@@ -39,6 +40,9 @@ verilator --lint-only \
  rtl/tensor/weight_tensor_load_controller.sv \
  rtl/tensor/output_tensor_store_controller.sv \
  rtl/stream/tensor_packet_router.sv \
+ rtl/stream/packed_dma_packet_parser.sv \
+ rtl/stream/packed_dma_runtime_router.sv \
+ rtl/stream/packed_dma_packet_writer.sv \
  rtl/runtime/cnn_metadata_word_ram.sv \
  rtl/runtime/cnn_model_metadata_store.sv \
  rtl/runtime/cnn_runtime_parameter_banks.sv \
@@ -97,5 +101,44 @@ verilator --lint-only \
  rtl/tensor/weight_scratchpad.sv \
  rtl/tensor/ping_pong_weight_scratchpad.sv \
  rtl/runtime/cnn_runtime_parameter_banks.sv
+
+verilator --lint-only \
+ -Wall \
+ -Wno-fatal \
+ -Wno-BLKLOOPINIT \
+ -Wno-BLKSEQ \
+ -Wno-DECLFILENAME \
+ -Wno-PINCONNECTEMPTY \
+ -Wno-UNUSEDSIGNAL \
+ -Wno-UNUSEDPARAM \
+ --top-module packed_dma_packet_parser \
+ rtl/include/cnn_dma_packet_pkg.sv \
+ rtl/stream/packed_dma_packet_parser.sv
+
+verilator --lint-only \
+ -Wall \
+ -Wno-fatal \
+ -Wno-BLKLOOPINIT \
+ -Wno-BLKSEQ \
+ -Wno-DECLFILENAME \
+ -Wno-PINCONNECTEMPTY \
+ -Wno-UNUSEDSIGNAL \
+ -Wno-UNUSEDPARAM \
+ --top-module packed_dma_runtime_router \
+ rtl/include/cnn_dma_packet_pkg.sv \
+ rtl/stream/packed_dma_runtime_router.sv
+
+verilator --lint-only \
+ -Wall \
+ -Wno-fatal \
+ -Wno-BLKLOOPINIT \
+ -Wno-BLKSEQ \
+ -Wno-DECLFILENAME \
+ -Wno-PINCONNECTEMPTY \
+ -Wno-UNUSEDSIGNAL \
+ -Wno-UNUSEDPARAM \
+ --top-module packed_dma_packet_writer \
+ rtl/include/cnn_dma_packet_pkg.sv \
+ rtl/stream/packed_dma_packet_writer.sv
 
 echo "[PASS] Verilator lint completed"

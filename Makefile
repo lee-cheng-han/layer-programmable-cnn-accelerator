@@ -4,7 +4,7 @@ TB ?= tb_axi_stream_full_network_golden_flow
 VITIS_DATA_DIR ?= $(CURDIR)/build/vitis_data
 
 .PHONY: xsim regression xsim-regression lint clean flow-report report-flow check-warnings docs-check preboard-proof
-.PHONY: unit descriptor-test parameter-bank-test programmable-engine-test model-test model-package-example golden-test synth-sweep synth-report
+.PHONY: unit descriptor-test parameter-bank-test programmable-engine-test packed-dma-test packed-dma-runtime-test packed-dma-writer-test model-test model-package-example golden-test synth-sweep synth-report
 .PHONY: top-impl top-report baremetal-headers vitis-app
 .PHONY: zybo-z7-project zybo-z7-bitstream zybo-z7-xsa full-zybo-z7-flow
 .PHONY: boot-image full-preboard-proof program-zybo-z7
@@ -25,6 +25,15 @@ parameter-bank-test:
 
 programmable-engine-test:
 	bash scripts/run_programmable_engine_tb.sh
+
+packed-dma-test:
+	bash scripts/run_packed_dma_tb.sh
+
+packed-dma-runtime-test:
+	bash scripts/run_packed_dma_runtime_tb.sh
+
+packed-dma-writer-test:
+	bash scripts/run_packed_dma_writer_tb.sh
 
 model-test:
 	python3 -m unittest discover -s tests -p 'test_*.py'

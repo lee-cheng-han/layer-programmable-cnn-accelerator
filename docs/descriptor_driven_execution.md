@@ -7,9 +7,10 @@ metadata bank. It sequences one to eight V1 convolution descriptors without
 rebuilding the bitstream and reuses the existing `single_layer_scheduler` for
 both 1x1 and 3x3 layers.
 
-This is a verified pre-integration path. The board-facing AXI-stream system
-continues to use the preserved fixed three-layer controller until runtime
-parameter banks and the packed DMA protocol are available.
+This is a verified pre-integration path. Runtime parameter banks and the packed
+DMA protocol are implemented and tested around it; the board-facing AXI-stream
+system continues to use the preserved fixed three-layer controller until
+Phase 8 adds DDR-backed tiled execution.
 
 ## Execution Path
 

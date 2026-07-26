@@ -111,8 +111,11 @@ model generations. A generalized controller now consumes the active metadata
 view and executes one to eight mixed 1x1/3x3 layers. Two reusable,
 scratchpad-backed parameter banks now enforce exact lengths and ABI CRC32,
 retain layer-tagged bias/quantization state, and overlap prefetch with compute.
-The next milestone is the packed, versioned DMA protocol that connects this
-programmable path to the board-facing stream system.
+A packed, versioned DMA data plane now validates exact byte lengths,
+`TKEEP`/`TLAST`, tile metadata, packet recovery, parameter loading, and packed
+output generation. The next milestone is DDR-backed spatial tiling and halo
+handling that connects this programmable path to the board-facing stream
+system.
 
 The control plane also exposes versioned
 [capability discovery and structured errors](docs/capability_and_errors.md).
@@ -227,6 +230,14 @@ and AXI end-of-packet signaling before allowing execution.
 
 See [stream_interface.md](docs/stream_interface.md) for the wire-level format
 and error behavior.
+
+The layer-programmable path uses the implemented V1 packed protocol: an
+eight-word versioned header followed by exact-length payload bytes, with four
+INT8 elements per 32-bit beat, low-lane `TKEEP`, and `TLAST` on the final beat.
+It carries tensor/layer IDs, tile coordinates, channel ranges, and job IDs.
+See [packed_dma_protocol.md](docs/packed_dma_protocol.md). This path is
+pre-integration RTL evidence; the generated board bitstream continues to use
+the seven-packet contract above until Phase 8.
 
 ## Repository Layout
 
@@ -398,6 +409,7 @@ record.
 | [Architecture](docs/architecture.md) | Processing system, DMA, datapath, and network structure |
 | [Block diagrams](docs/block_diagram.md) | System and accelerator data-flow diagrams |
 | [Stream interface](docs/stream_interface.md) | Tensor packet format and protocol errors |
+| [Packed DMA protocol](docs/packed_dma_protocol.md) | Versioned programmable tile and parameter packet contract |
 | [Register map](docs/register_map.md) | AXI-Lite software interface |
 | [Runtime model lifecycle](docs/runtime_model_lifecycle.md) | Dual-bank metadata loading, validation, and atomic activation |
 | [Descriptor-driven execution](docs/descriptor_driven_execution.md) | Active-bank layer sequencing, semantic checks, parameter handshake, and RTL evidence |

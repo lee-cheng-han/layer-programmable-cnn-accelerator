@@ -19,8 +19,8 @@ atomically activated, and reused across multiple images.
 | 4 | Add runtime metadata memories and atomic model lifecycle | Complete |
 | 5 | Generalize descriptor-driven layer execution control | Complete |
 | 6 | Add reusable active/prefetch parameter banks | Complete |
-| 7 | Introduce packed, versioned DMA protocol | Next |
-| 8 | Implement DDR-backed spatial tiling and halo handling | Planned |
+| 7 | Introduce packed, versioned DMA protocol | Complete |
+| 8 | Implement DDR-backed spatial tiling and halo handling | Next |
 | 9 | Complete residual and quantization behavior in runtime RTL | Planned |
 | 10 | Build runtime software and connect interrupts | Planned |
 | 11 | Add autonomous DDR fetching | Planned |
@@ -57,6 +57,13 @@ overlapped prefetch. `cnn_programmable_job_engine` connects the banked weight
 read path directly to the descriptor controller and proves an eight-layer job
 while recycling only two banks. See
 [runtime_parameter_banks.md](runtime_parameter_banks.md).
+
+Phase 7 now defines an eight-word versioned packet header, packed INT8 byte
+lanes, natural INT32 bias beats, exact byte lengths, low-lane `TKEEP`, final
+`TLAST`, context backpressure, malformed-packet draining, and parameter-load
+abort. The ingress parser/router is integrated with the real reusable banks,
+and the egress writer generates packed `OUTPUT_TILE` packets. See
+[packed_dma_protocol.md](packed_dma_protocol.md).
 
 ## Final Workflow
 

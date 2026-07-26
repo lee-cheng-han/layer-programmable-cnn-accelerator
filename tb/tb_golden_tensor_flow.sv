@@ -95,6 +95,7 @@ module tb_golden_tensor_flow;
  .weights_3x3(weights_3x3),
  .bias(bias),
  .use_scratchpad_operands(1'b0),
+ .use_scratchpad_weights(1'b0),
  .scratch_activation_read_pixel(),
  .scratch_activation_read_c_base(),
  .scratch_activation_lane_mask(),

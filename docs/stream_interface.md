@@ -1,6 +1,10 @@
 # Stream Interface Contract
 
-This document defines the stream contract for the board-facing image-to-image CNN path. It covers the logical streams on `stream_loaded_multi_layer_job_controller` and their packetized AXI mapping in `cnn_image2image_axi_stream_top`.
+This document defines the preserved fixed-network stream contract currently
+used by the board-facing image-to-image path. The programmable runtime's
+implemented packed V1 protocol is specified separately in
+[packed_dma_protocol.md](packed_dma_protocol.md); it becomes board-facing with
+DDR-backed tiled execution in Phase 8.
 
 The current wrapper uses four logical ready/valid streams:
 
@@ -158,9 +162,10 @@ pixel == image_width*image_height-1
 channel == 2
 ```
 
-## AXI Mapping
+## Legacy Board AXI Mapping
 
-The current RTL exposes separate logical streams. A future AXI-facing wrapper can map them directly to independent AXI-stream channels:
+The fixed-network controller exposes separate logical streams. Its current
+AXI-facing wrapper maps them onto one physical input stream:
 
 | Logical signal | AXI-stream signal |
 |---|---|

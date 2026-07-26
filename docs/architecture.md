@@ -87,6 +87,9 @@ Input RGB tensor
 | `descriptor_driven_job_controller` | Validates and sequences one to eight active runtime layer descriptors through the reusable scheduler |
 | `cnn_runtime_parameter_banks` | Validates, tags, owns, and overlaps two reusable weight/postprocessing banks |
 | `cnn_programmable_job_engine` | Connects descriptor-driven execution to scratchpad-backed runtime parameters |
+| `packed_dma_packet_parser` | Validates V1 packet headers, exact byte framing, `TKEEP`, `TLAST`, and recovery |
+| `packed_dma_runtime_router` | Routes packed tiles and loads weight/bias packets into reusable parameter banks |
+| `packed_dma_packet_writer` | Packs output bytes and generates versioned `OUTPUT_TILE` packets |
 | `tensor_packet_router` | Validates and routes the seven-packet tensor input stream |
 | `stream_loaded_multi_layer_job_controller` | Loads tensors, overlaps parameter prefetch, and runs the 3-layer job |
 | `single_layer_scheduler` | Reuses 1x1/3x3 tiled engines across image positions |
@@ -99,7 +102,9 @@ The current board path uses `stream_loaded_multi_layer_job_controller`. The
 parallel layer-programmable path connects the active view from
 `cnn_model_metadata_store` through `cnn_programmable_job_engine` to two runtime
 parameter banks and has eight-layer golden RTL evidence. It becomes
-board-facing after Phase 7 adds the packed DMA protocol.
+board-facing after Phase 8 connects the completed packed DMA protocol to
+DDR-backed tiled execution. The generated board bitstream still uses the
+preserved fixed-network seven-packet path.
 
 ## Register Map
 

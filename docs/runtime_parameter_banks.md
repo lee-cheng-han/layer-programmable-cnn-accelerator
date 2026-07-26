@@ -9,8 +9,8 @@ atomically so that the loader can reuse it without overwriting parameters still
 owned by compute.
 
 The board-facing fixed-network path remains unchanged. The programmable path is
-integrated in `cnn_programmable_job_engine` and verified before the packed DMA
-protocol is connected in Phase 7.
+integrated in `cnn_programmable_job_engine`, and the Phase 7 packed DMA router
+now loads these banks from 32-bit packet payloads.
 
 ## Physical Organization
 
@@ -28,7 +28,7 @@ full per-channel postprocessing entries added in Phase 9.
 
 ## Loading Contract
 
-The Phase 6 loader is intentionally narrower than the future DMA protocol:
+The parameter-bank core retains a narrow internal loader:
 
 - weights arrive as signed INT8 bytes in OIHW order
 - biases arrive as signed INT32 words
@@ -42,8 +42,11 @@ CRC32 uses the reflected polynomial `0xEDB88320`, initial value
 `0xFFFFFFFF`, and final XOR `0xFFFFFFFF`, matching Python `zlib.crc32` and the
 V1 package ABI. A length or checksum failure leaves the selected bank invalid.
 
-Phase 7 replaces these temporary byte/word loader signals with 32-bit packed
-AXI-stream packets, `TKEEP`, `TLAST`, exact payload lengths, and recovery rules.
+`packed_dma_runtime_router` bridges the V1 32-bit packets to that internal
+interface. It serializes packed weight lanes from low to high, forwards bias
+words naturally, checks layer IDs and exact lengths, and aborts the selected
+bank if the packet parser reports malformed framing. See
+[packed_dma_protocol.md](packed_dma_protocol.md).
 
 ## Ownership
 
@@ -69,6 +72,7 @@ controller releases ownership.
 ```bash
 make parameter-bank-test
 make programmable-engine-test
+make packed-dma-runtime-test
 ```
 
 `tb_runtime_parameter_banks` covers two-bank loading, layer matching,
@@ -79,3 +83,7 @@ prefetch, CRC rejection, and exact-length rejection.
 through only two physical banks. It recycles each released bank, observes
 loading while the other bank computes, and checks the final tensor result.
 
+`tb_packed_dma_runtime_router` drives activation, weight, and bias packets
+through the parser and router into the real banks. It covers packed lane order,
+backpressure, CRC completion, semantic rejection, malformed-load abort, and
+recovery.

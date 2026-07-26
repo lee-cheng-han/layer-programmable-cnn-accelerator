@@ -90,6 +90,18 @@ jobs:
         run: |
           make programmable-engine-test
 
+      - name: Run packed DMA protocol test
+        run: |
+          make packed-dma-test
+
+      - name: Run packed DMA runtime integration test
+        run: |
+          make packed-dma-runtime-test
+
+      - name: Run packed DMA output writer test
+        run: |
+          make packed-dma-writer-test
+
   docs:
     name: ci / docs · evidence consistency
     runs-on: ubuntu-24.04

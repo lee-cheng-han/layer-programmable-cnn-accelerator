@@ -19,6 +19,9 @@
 | runtime controller RTL | `tb_descriptor_driven_job_controller` | Covered | active metadata decode, mixed 1x1/3x3 execution, parameter stalls, residual output, eight-layer limit, and negative launch/geometry cases |
 | runtime parameter RTL | `tb_runtime_parameter_banks` | Covered | two-bank loading, exact lengths, ABI CRC32, ownership, overlap, scratchpad reads, and failure isolation |
 | programmable engine RTL | `tb_programmable_job_engine` | Covered | eight descriptor-driven layers execute while two physical parameter banks are recycled and prefetched |
+| packed DMA parser RTL | `tb_packed_dma_packet_parser` | Covered | versioned headers, exact lengths, partial beats, backpressure, malformed framing, drain, and recovery |
+| packed DMA runtime RTL | `tb_packed_dma_runtime_router` | Covered | activation routing, packed weight serialization, bias loading, CRC completion, semantic rejection, abort, and recovery |
+| packed DMA output RTL | `tb_packed_dma_packet_writer` | Covered | output headers, four-byte packing, partial final beat, `TKEEP`, `TLAST`, and backpressure |
 | scheduler RTL | `tb_single_layer_scheduler` | Covered | full-image array-backed and banked-scratchpad-backed scheduler paths |
 | controller RTL | `tb_full_network_golden_flow` | Covered | full 3-layer denoising controller against Python golden tensors |
 | stream RTL | `tb_stream_loaded_full_network_golden_flow` | Covered | packet-loaded full network with output backpressure |
@@ -46,6 +49,7 @@
 | runtime metadata lifecycle | High pre-board | standalone lifecycle test plus complete AXI-Lite metadata load and activation |
 | descriptor-driven execution | High pre-integration | active-bank four-layer golden flow, eight-layer boundary flow, and negative tests under Verilator CI |
 | reusable runtime parameters | High pre-integration | bank-level negative tests plus integrated eight-layer scratchpad-backed execution |
+| packed programmable DMA protocol | High pre-integration | parser/router/bank and output-writer tests with malformed packet recovery |
 | Zynq block design integration | High pre-board | bitstream and XSA generated at 125 MHz |
 | bare-metal DMA integration | High pre-board | Vitis app and BOOT.BIN build from XSA |
 | real hardware behavior | Pending | board not yet available |
@@ -57,6 +61,9 @@ make model-test
 make descriptor-test
 make parameter-bank-test
 make programmable-engine-test
+make packed-dma-test
+make packed-dma-runtime-test
+make packed-dma-writer-test
 make golden-test
 make unit
 make regression

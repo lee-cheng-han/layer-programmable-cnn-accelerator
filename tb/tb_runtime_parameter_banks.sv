@@ -66,6 +66,7 @@ module tb_runtime_parameter_banks;
     .rst_n(rst_n),
     .clear_error(clear_error),
     .load_start(load_start),
+    .load_abort(1'b0),
     .load_ready(load_ready),
     .load_layer_id(load_layer_id),
     .load_kernel_size(load_kernel_size),
