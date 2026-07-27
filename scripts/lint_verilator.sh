@@ -39,14 +39,19 @@ verilator --lint-only \
  rtl/tensor/activation_tensor_load_controller.sv \
  rtl/tensor/weight_tensor_load_controller.sv \
  rtl/tensor/output_tensor_store_controller.sv \
+ rtl/tensor/spatial_tile_planner.sv \
+ rtl/tensor/halo_tile_load_controller.sv \
  rtl/stream/tensor_packet_router.sv \
  rtl/stream/packed_dma_packet_parser.sv \
  rtl/stream/packed_dma_runtime_router.sv \
  rtl/stream/packed_dma_packet_writer.sv \
+ rtl/stream/tile_output_serializer.sv \
  rtl/runtime/cnn_metadata_word_ram.sv \
  rtl/runtime/cnn_model_metadata_store.sv \
  rtl/runtime/cnn_runtime_parameter_banks.sv \
  rtl/runtime/cnn_programmable_job_engine.sv \
+ rtl/runtime/cnn_tiled_layer_runtime.sv \
+ rtl/runtime/cnn_tiled_multi_layer_controller.sv \
  rtl/scheduler/denoise_layer_descriptor_rom.sv \
  rtl/scheduler/performance_counters.sv \
  rtl/compute/reduction_tree.sv \

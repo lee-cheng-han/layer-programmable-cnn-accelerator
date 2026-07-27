@@ -20,7 +20,7 @@ atomically activated, and reused across multiple images.
 | 5 | Generalize descriptor-driven layer execution control | Complete |
 | 6 | Add reusable active/prefetch parameter banks | Complete |
 | 7 | Introduce packed, versioned DMA protocol | Complete |
-| 8 | Implement DDR-backed spatial tiling and halo handling | Next |
+| 8 | Implement DDR-backed spatial tiling and halo handling | In progress; single-layer tiled RTL path complete |
 | 9 | Complete residual and quantization behavior in runtime RTL | Planned |
 | 10 | Build runtime software and connect interrupts | Planned |
 | 11 | Add autonomous DDR fetching | Planned |
@@ -64,6 +64,20 @@ lanes, natural INT32 bias beats, exact byte lengths, low-lane `TKEEP`, final
 abort. The ingress parser/router is integrated with the real reusable banks,
 and the egress writer generates packed `OUTPUT_TILE` packets. See
 [packed_dma_protocol.md](packed_dma_protocol.md).
+
+Phase 8 now has a synthesizable output-tile planner, clipped receptive-field
+geometry, explicit local halo zero fill, packed tile ingestion into a real
+banked activation scratchpad, and a multi-layer controller that sequences
+active descriptors through the tiled 1x1/3x3 runtime and reusable parameter
+banks. Multi-tile golden tests cover 1x1 and 3x3 stride-2 output, clipped
+boundaries, partial packets, and AXI backpressure. A two-layer packed flow also
+proves tensor-ID preservation, software-managed DDR handoff, progress, and
+invalid-chain rejection. The atomically active metadata view exports layer
+tile hints and complete input/output DDR offset/allocation/stride records.
+Direct metadata-store wiring, software DDR gather/scatter, board integration,
+and randomized multi-layer payload coverage remain. The planner itself has
+deterministic randomized geometry coverage. See
+[tiled_execution.md](tiled_execution.md).
 
 ## Final Workflow
 

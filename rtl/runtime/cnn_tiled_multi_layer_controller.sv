@@ -1,0 +1,558 @@
+`timescale 1ns/1ps
+
+module cnn_tiled_multi_layer_controller #(
+  parameter int PC = 2,
+  parameter int PK = 4,
+  parameter int MAX_CIN = 16,
+  parameter int MAX_COUT = 16,
+  parameter int MAX_LAYERS = 8,
+  parameter int MAX_TILE_WIDTH = 16,
+  parameter int MAX_TILE_HEIGHT = 16,
+  parameter int DATA_W = 8,
+  parameter int ACC_W = 32,
+  parameter int COUNT_W = 8
+)(
+  input  logic clk,
+  input  logic rst_n,
+  input  logic clear,
+
+  input  logic start,
+  input  logic [31:0] job_id,
+  input  logic model_active_valid,
+  input  logic [15:0] model_layer_count,
+
+  output logic [2:0] descriptor_layer_index,
+  input  logic descriptor_valid,
+  input  logic [15:0] descriptor_layer_id,
+  input  logic [15:0] descriptor_opcode,
+  input  logic descriptor_last_layer,
+  input  logic descriptor_bias_enable,
+  input  logic [15:0] descriptor_input_tensor_id,
+  input  logic [15:0] descriptor_output_tensor_id,
+  input  logic [15:0] descriptor_residual_tensor_id,
+  input  logic [15:0] descriptor_input_width,
+  input  logic [15:0] descriptor_input_height,
+  input  logic [15:0] descriptor_input_channels,
+  input  logic [15:0] descriptor_output_width,
+  input  logic [15:0] descriptor_output_height,
+  input  logic [15:0] descriptor_output_channels,
+  input  logic [7:0] descriptor_kernel_height,
+  input  logic [7:0] descriptor_kernel_width,
+  input  logic [7:0] descriptor_stride_y,
+  input  logic [7:0] descriptor_stride_x,
+  input  logic [7:0] descriptor_padding_top,
+  input  logic [7:0] descriptor_padding_bottom,
+  input  logic [7:0] descriptor_padding_left,
+  input  logic [7:0] descriptor_padding_right,
+  input  logic [7:0] descriptor_dilation_y,
+  input  logic [7:0] descriptor_dilation_x,
+  input  logic [7:0] descriptor_activation,
+  input  logic [7:0] descriptor_residual_mode,
+  input  logic [15:0] descriptor_tile_height_hint,
+  input  logic [15:0] descriptor_tile_width_hint,
+  input  logic [63:0] descriptor_input_ddr_offset,
+  input  logic [31:0] descriptor_input_allocation_size,
+  input  logic [31:0] descriptor_input_row_stride,
+  input  logic [31:0] descriptor_input_pixel_stride,
+  input  logic [31:0] descriptor_input_channel_stride,
+  input  logic [63:0] descriptor_output_ddr_offset,
+  input  logic [31:0] descriptor_output_allocation_size,
+  input  logic [31:0] descriptor_output_row_stride,
+  input  logic [31:0] descriptor_output_pixel_stride,
+  input  logic [31:0] descriptor_output_channel_stride,
+
+  output logic parameter_request,
+  output logic [2:0] parameter_layer_id,
+  input  logic parameter_ready,
+  output logic parameter_release,
+  input  logic parameter_quant_enable,
+  input  logic [4:0] parameter_quant_shift,
+  input  logic signed [ACC_W-1:0] parameter_bias [MAX_COUT],
+  output logic [COUNT_W-1:0] parameter_weight_read_k_base,
+  output logic [COUNT_W-1:0] parameter_weight_read_c_base,
+  output logic [3:0] parameter_weight_read_kernel_idx,
+  output logic [PK-1:0] parameter_weight_out_lane_mask,
+  output logic [PC-1:0] parameter_weight_in_lane_mask,
+  input  logic signed [DATA_W-1:0] parameter_weight_mat_data [PK][PC],
+
+  input  logic activation_packet_start,
+  output logic activation_packet_ready,
+  input  logic [31:0] activation_job_id,
+  input  logic [15:0] activation_tensor_id,
+  input  logic [15:0] activation_layer_id,
+  input  logic [15:0] activation_tile_x,
+  input  logic [15:0] activation_tile_y,
+  input  logic [15:0] activation_tile_width,
+  input  logic [15:0] activation_tile_height,
+  input  logic [15:0] activation_channel_offset,
+  input  logic [15:0] activation_channel_count,
+  input  logic [31:0] activation_payload_length,
+  input  logic activation_valid,
+  output logic activation_ready,
+  input  logic [31:0] activation_data,
+  input  logic [3:0] activation_keep,
+  input  logic activation_last,
+
+  output logic [31:0] m_axis_tdata,
+  output logic [3:0] m_axis_tkeep,
+  output logic m_axis_tvalid,
+  input  logic m_axis_tready,
+  output logic m_axis_tlast,
+
+  output logic [2:0] active_layer,
+  output logic [15:0] active_input_tensor_id,
+  output logic [15:0] active_output_tensor_id,
+  output logic [63:0] active_input_ddr_offset,
+  output logic [31:0] active_input_allocation_size,
+  output logic [31:0] active_input_row_stride,
+  output logic [31:0] active_input_pixel_stride,
+  output logic [31:0] active_input_channel_stride,
+  output logic [63:0] active_output_ddr_offset,
+  output logic [31:0] active_output_allocation_size,
+  output logic [31:0] active_output_row_stride,
+  output logic [31:0] active_output_pixel_stride,
+  output logic [31:0] active_output_channel_stride,
+  output logic [15:0] current_tile_x,
+  output logic [15:0] current_tile_y,
+  output logic [31:0] completed_layer_count,
+  output logic [31:0] completed_tile_count,
+  output logic layer_done,
+  output logic busy,
+  output logic done,
+  output logic error,
+  output logic [7:0] error_code,
+  output logic [2:0] error_layer
+);
+  import cnn_accel_abi_pkg::*;
+
+  localparam logic [7:0] MULTI_ERROR_NONE = 8'd0;
+  localparam logic [7:0] MULTI_ERROR_NO_MODEL = 8'd1;
+  localparam logic [7:0] MULTI_ERROR_LAYER_COUNT = 8'd2;
+  localparam logic [7:0] MULTI_ERROR_DESCRIPTOR = 8'd3;
+  localparam logic [7:0] MULTI_ERROR_UNSUPPORTED = 8'd4;
+  localparam logic [7:0] MULTI_ERROR_GEOMETRY = 8'd5;
+  localparam logic [7:0] MULTI_ERROR_CHAIN = 8'd6;
+  localparam logic [7:0] MULTI_ERROR_DDR_LAYOUT = 8'd7;
+  localparam logic [7:0] MULTI_ERROR_RUNTIME = 8'd8;
+  localparam logic [7:0] MULTI_ERROR_BUSY = 8'd9;
+
+  typedef enum logic [2:0] {
+    S_IDLE,
+    S_CHECK_DESCRIPTOR,
+    S_START_LAYER,
+    S_WAIT_LAYER,
+    S_ADVANCE_LAYER,
+    S_DONE,
+    S_ERROR
+  } state_t;
+
+  state_t state;
+  logic [2:0] layer_index;
+  logic [3:0] layer_count_q;
+  logic runtime_start;
+  logic runtime_done;
+  logic runtime_error;
+  logic [7:0] runtime_error_code;
+  logic descriptor_semantic_valid;
+  logic [7:0] descriptor_error_code;
+  logic descriptor_is_final;
+  logic [31:0] expected_output_width;
+  logic [31:0] expected_output_height;
+  logic [63:0] minimum_input_allocation;
+  logic [63:0] minimum_output_allocation;
+
+  logic [15:0] previous_output_tensor_id;
+  logic [15:0] previous_output_width;
+  logic [15:0] previous_output_height;
+  logic [15:0] previous_output_channels;
+  logic [63:0] previous_output_ddr_offset;
+
+  logic [15:0] active_input_width;
+  logic [15:0] active_input_height;
+  logic [15:0] active_output_width;
+  logic [15:0] active_output_height;
+  logic [7:0] active_input_channels;
+  logic [7:0] active_output_channels;
+  logic [1:0] active_kernel_size;
+  logic [1:0] active_stride;
+  logic active_padding_left;
+  logic active_padding_right;
+  logic active_padding_top;
+  logic active_padding_bottom;
+  logic active_bias_enable;
+  logic active_relu_enable;
+  logic [15:0] active_tile_width_hint;
+  logic [15:0] active_tile_height_hint;
+
+  assign descriptor_layer_index = layer_index;
+  assign active_layer = layer_index;
+  assign busy = (state != S_IDLE) && (state != S_DONE);
+  assign runtime_start = state == S_START_LAYER;
+  assign descriptor_is_final =
+    (4'(layer_index) + 4'd1) == layer_count_q;
+
+  always_comb begin
+    expected_output_width = 32'd0;
+    expected_output_height = 32'd0;
+    if ((descriptor_stride_x != 0) &&
+        ((32'(descriptor_input_width) + 32'(descriptor_padding_left) +
+          32'(descriptor_padding_right)) >=
+         32'(descriptor_kernel_width))) begin
+      expected_output_width =
+        ((32'(descriptor_input_width) + 32'(descriptor_padding_left) +
+          32'(descriptor_padding_right) - 32'(descriptor_kernel_width)) /
+         32'(descriptor_stride_x)) + 32'd1;
+    end
+    if ((descriptor_stride_y != 0) &&
+        ((32'(descriptor_input_height) + 32'(descriptor_padding_top) +
+          32'(descriptor_padding_bottom)) >=
+         32'(descriptor_kernel_height))) begin
+      expected_output_height =
+        ((32'(descriptor_input_height) + 32'(descriptor_padding_top) +
+          32'(descriptor_padding_bottom) - 32'(descriptor_kernel_height)) /
+         32'(descriptor_stride_y)) + 32'd1;
+    end
+
+    minimum_input_allocation =
+      (64'(descriptor_input_height - 16'd1) *
+       64'(descriptor_input_row_stride)) +
+      (64'(descriptor_input_width - 16'd1) *
+       64'(descriptor_input_pixel_stride)) +
+      (64'(descriptor_input_channels - 16'd1) *
+       64'(descriptor_input_channel_stride)) + 64'd1;
+    minimum_output_allocation =
+      (64'(descriptor_output_height - 16'd1) *
+       64'(descriptor_output_row_stride)) +
+      (64'(descriptor_output_width - 16'd1) *
+       64'(descriptor_output_pixel_stride)) +
+      (64'(descriptor_output_channels - 16'd1) *
+       64'(descriptor_output_channel_stride)) + 64'd1;
+  end
+
+  always_comb begin
+    descriptor_semantic_valid = 1'b0;
+    descriptor_error_code = MULTI_ERROR_DESCRIPTOR;
+
+    if (!descriptor_valid ||
+        (descriptor_layer_id != 16'(layer_index)) ||
+        (descriptor_last_layer != descriptor_is_final)) begin
+      descriptor_error_code = MULTI_ERROR_DESCRIPTOR;
+    end else if ((descriptor_opcode != OPCODE_CONV2D) ||
+                 !((descriptor_kernel_width == 1) ||
+                   (descriptor_kernel_width == 3)) ||
+                 (descriptor_kernel_height != descriptor_kernel_width) ||
+                 !((descriptor_stride_x == 1) ||
+                   (descriptor_stride_x == 2)) ||
+                 (descriptor_stride_y != descriptor_stride_x) ||
+                 (descriptor_padding_top > 1) ||
+                 (descriptor_padding_bottom > 1) ||
+                 (descriptor_padding_left > 1) ||
+                 (descriptor_padding_right > 1) ||
+                 (descriptor_dilation_x != 1) ||
+                 (descriptor_dilation_y != 1) ||
+                 (descriptor_activation > ACTIVATION_RELU) ||
+                 (descriptor_residual_mode != RESIDUAL_NONE)) begin
+      descriptor_error_code = MULTI_ERROR_UNSUPPORTED;
+    end else if ((descriptor_input_width == 0) ||
+                 (descriptor_input_height == 0) ||
+                 (descriptor_output_width == 0) ||
+                 (descriptor_output_height == 0) ||
+                 (descriptor_input_width > 16'(MAX_TENSOR_WIDTH)) ||
+                 (descriptor_input_height > 16'(MAX_TENSOR_HEIGHT)) ||
+                 (descriptor_output_width > 16'(MAX_TENSOR_WIDTH)) ||
+                 (descriptor_output_height > 16'(MAX_TENSOR_HEIGHT)) ||
+                 (descriptor_input_channels == 0) ||
+                 (descriptor_input_channels > 16'(MAX_CIN)) ||
+                 (descriptor_output_channels == 0) ||
+                 (descriptor_output_channels > 16'(MAX_COUT)) ||
+                 (expected_output_width != 32'(descriptor_output_width)) ||
+                 (expected_output_height != 32'(descriptor_output_height)) ||
+                 (descriptor_tile_width_hint > 16'(MAX_TILE_WIDTH)) ||
+                 (descriptor_tile_height_hint > 16'(MAX_TILE_HEIGHT))) begin
+      descriptor_error_code = MULTI_ERROR_GEOMETRY;
+    end else if ((layer_index != 0) &&
+                 ((descriptor_input_tensor_id != previous_output_tensor_id) ||
+                  (descriptor_input_width != previous_output_width) ||
+                  (descriptor_input_height != previous_output_height) ||
+                  (descriptor_input_channels != previous_output_channels) ||
+                  (descriptor_input_ddr_offset !=
+                   previous_output_ddr_offset))) begin
+      descriptor_error_code = MULTI_ERROR_CHAIN;
+    end else if ((descriptor_input_channel_stride != 1) ||
+                 (descriptor_output_channel_stride != 1) ||
+                 (descriptor_input_pixel_stride <
+                  descriptor_input_channels) ||
+                 (descriptor_output_pixel_stride <
+                  descriptor_output_channels) ||
+                 (descriptor_input_row_stride <
+                  (32'(descriptor_input_width) *
+                   descriptor_input_pixel_stride)) ||
+                 (descriptor_output_row_stride <
+                  (32'(descriptor_output_width) *
+                   descriptor_output_pixel_stride)) ||
+                 (64'(descriptor_input_allocation_size) <
+                  minimum_input_allocation) ||
+                 (64'(descriptor_output_allocation_size) <
+                  minimum_output_allocation)) begin
+      descriptor_error_code = MULTI_ERROR_DDR_LAYOUT;
+    end else begin
+      descriptor_semantic_valid = 1'b1;
+      descriptor_error_code = MULTI_ERROR_NONE;
+    end
+  end
+
+  cnn_tiled_layer_runtime #(
+    .PC(PC),
+    .PK(PK),
+    .MAX_CIN(MAX_CIN),
+    .MAX_COUT(MAX_COUT),
+    .MAX_TILE_WIDTH(MAX_TILE_WIDTH),
+    .MAX_TILE_HEIGHT(MAX_TILE_HEIGHT),
+    .DATA_W(DATA_W),
+    .ACC_W(ACC_W),
+    .COUNT_W(COUNT_W)
+  ) u_tiled_layer_runtime (
+    .clk(clk),
+    .rst_n(rst_n),
+    .clear(clear),
+    .start(runtime_start),
+    .job_id(job_id),
+    .layer_id({13'd0, layer_index}),
+    .input_tensor_id(active_input_tensor_id),
+    .output_tensor_id(active_output_tensor_id),
+    .input_width(active_input_width),
+    .input_height(active_input_height),
+    .output_width(active_output_width),
+    .output_height(active_output_height),
+    .kernel_size(active_kernel_size),
+    .stride(active_stride),
+    .padding_left(active_padding_left),
+    .padding_right(active_padding_right),
+    .padding_top(active_padding_top),
+    .padding_bottom(active_padding_bottom),
+    .cin(active_input_channels),
+    .cout(active_output_channels),
+    .bias_enable(active_bias_enable),
+    .relu_enable(active_relu_enable),
+    .tile_width_hint(active_tile_width_hint),
+    .tile_height_hint(active_tile_height_hint),
+    .parameter_request(parameter_request),
+    .parameter_layer_id(parameter_layer_id),
+    .parameter_ready(parameter_ready),
+    .parameter_release(parameter_release),
+    .parameter_quant_enable(parameter_quant_enable),
+    .parameter_quant_shift(parameter_quant_shift),
+    .parameter_bias(parameter_bias),
+    .parameter_weight_read_k_base(parameter_weight_read_k_base),
+    .parameter_weight_read_c_base(parameter_weight_read_c_base),
+    .parameter_weight_read_kernel_idx(parameter_weight_read_kernel_idx),
+    .parameter_weight_out_lane_mask(parameter_weight_out_lane_mask),
+    .parameter_weight_in_lane_mask(parameter_weight_in_lane_mask),
+    .parameter_weight_mat_data(parameter_weight_mat_data),
+    .activation_packet_start(activation_packet_start),
+    .activation_packet_ready(activation_packet_ready),
+    .activation_job_id(activation_job_id),
+    .activation_tensor_id(activation_tensor_id),
+    .activation_layer_id(activation_layer_id),
+    .activation_tile_x(activation_tile_x),
+    .activation_tile_y(activation_tile_y),
+    .activation_tile_width(activation_tile_width),
+    .activation_tile_height(activation_tile_height),
+    .activation_channel_offset(activation_channel_offset),
+    .activation_channel_count(activation_channel_count),
+    .activation_payload_length(activation_payload_length),
+    .activation_valid(activation_valid),
+    .activation_ready(activation_ready),
+    .activation_data(activation_data),
+    .activation_keep(activation_keep),
+    .activation_last(activation_last),
+    .m_axis_tdata(m_axis_tdata),
+    .m_axis_tkeep(m_axis_tkeep),
+    .m_axis_tvalid(m_axis_tvalid),
+    .m_axis_tready(m_axis_tready),
+    .m_axis_tlast(m_axis_tlast),
+    .current_tile_x(current_tile_x),
+    .current_tile_y(current_tile_y),
+    .completed_tile_count(completed_tile_count),
+    .busy(),
+    .done(runtime_done),
+    .error(runtime_error),
+    .error_code(runtime_error_code)
+  );
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      state <= S_IDLE;
+      layer_index <= '0;
+      layer_count_q <= '0;
+      previous_output_tensor_id <= '0;
+      previous_output_width <= '0;
+      previous_output_height <= '0;
+      previous_output_channels <= '0;
+      previous_output_ddr_offset <= '0;
+      active_input_tensor_id <= '0;
+      active_output_tensor_id <= '0;
+      active_input_ddr_offset <= '0;
+      active_input_allocation_size <= '0;
+      active_input_row_stride <= '0;
+      active_input_pixel_stride <= '0;
+      active_input_channel_stride <= '0;
+      active_output_ddr_offset <= '0;
+      active_output_allocation_size <= '0;
+      active_output_row_stride <= '0;
+      active_output_pixel_stride <= '0;
+      active_output_channel_stride <= '0;
+      active_input_width <= '0;
+      active_input_height <= '0;
+      active_output_width <= '0;
+      active_output_height <= '0;
+      active_input_channels <= '0;
+      active_output_channels <= '0;
+      active_kernel_size <= '0;
+      active_stride <= '0;
+      active_padding_left <= 1'b0;
+      active_padding_right <= 1'b0;
+      active_padding_top <= 1'b0;
+      active_padding_bottom <= 1'b0;
+      active_bias_enable <= 1'b0;
+      active_relu_enable <= 1'b0;
+      active_tile_width_hint <= '0;
+      active_tile_height_hint <= '0;
+      completed_layer_count <= '0;
+      layer_done <= 1'b0;
+      done <= 1'b0;
+      error <= 1'b0;
+      error_code <= MULTI_ERROR_NONE;
+      error_layer <= '0;
+    end else begin
+      layer_done <= 1'b0;
+      done <= 1'b0;
+
+      if (clear) begin
+        state <= S_IDLE;
+        layer_index <= '0;
+        completed_layer_count <= '0;
+        error <= 1'b0;
+        error_code <= MULTI_ERROR_NONE;
+        error_layer <= '0;
+      end else if (start && (state != S_IDLE)) begin
+        error <= 1'b1;
+        error_code <= MULTI_ERROR_BUSY;
+        error_layer <= layer_index;
+        state <= S_ERROR;
+      end else begin
+        unique case (state)
+          S_IDLE: begin
+            if (start) begin
+              layer_index <= '0;
+              completed_layer_count <= '0;
+              error <= 1'b0;
+              error_code <= MULTI_ERROR_NONE;
+              error_layer <= '0;
+              if (!model_active_valid) begin
+                error <= 1'b1;
+                error_code <= MULTI_ERROR_NO_MODEL;
+                state <= S_ERROR;
+              end else if ((model_layer_count == 0) ||
+                           (model_layer_count > 16'(MAX_LAYERS))) begin
+                error <= 1'b1;
+                error_code <= MULTI_ERROR_LAYER_COUNT;
+                state <= S_ERROR;
+              end else begin
+                layer_count_q <= 4'(model_layer_count);
+                state <= S_CHECK_DESCRIPTOR;
+              end
+            end
+          end
+
+          S_CHECK_DESCRIPTOR: begin
+            if (!descriptor_semantic_valid) begin
+              error <= 1'b1;
+              error_code <= descriptor_error_code;
+              error_layer <= layer_index;
+              state <= S_ERROR;
+            end else begin
+              active_input_tensor_id <= descriptor_input_tensor_id;
+              active_output_tensor_id <= descriptor_output_tensor_id;
+              active_input_ddr_offset <= descriptor_input_ddr_offset;
+              active_input_allocation_size <=
+                descriptor_input_allocation_size;
+              active_input_row_stride <= descriptor_input_row_stride;
+              active_input_pixel_stride <= descriptor_input_pixel_stride;
+              active_input_channel_stride <=
+                descriptor_input_channel_stride;
+              active_output_ddr_offset <= descriptor_output_ddr_offset;
+              active_output_allocation_size <=
+                descriptor_output_allocation_size;
+              active_output_row_stride <= descriptor_output_row_stride;
+              active_output_pixel_stride <= descriptor_output_pixel_stride;
+              active_output_channel_stride <=
+                descriptor_output_channel_stride;
+              active_input_width <= descriptor_input_width;
+              active_input_height <= descriptor_input_height;
+              active_output_width <= descriptor_output_width;
+              active_output_height <= descriptor_output_height;
+              active_input_channels <= 8'(descriptor_input_channels);
+              active_output_channels <= 8'(descriptor_output_channels);
+              active_kernel_size <= 2'(descriptor_kernel_width);
+              active_stride <= 2'(descriptor_stride_x);
+              active_padding_left <= descriptor_padding_left[0];
+              active_padding_right <= descriptor_padding_right[0];
+              active_padding_top <= descriptor_padding_top[0];
+              active_padding_bottom <= descriptor_padding_bottom[0];
+              active_bias_enable <= descriptor_bias_enable;
+              active_relu_enable <=
+                descriptor_activation == ACTIVATION_RELU;
+              active_tile_width_hint <= descriptor_tile_width_hint;
+              active_tile_height_hint <= descriptor_tile_height_hint;
+              state <= S_START_LAYER;
+            end
+          end
+
+          S_START_LAYER: begin
+            state <= S_WAIT_LAYER;
+          end
+
+          S_WAIT_LAYER: begin
+            if (runtime_done) begin
+              if (runtime_error) begin
+                error <= 1'b1;
+                error_code <= MULTI_ERROR_RUNTIME;
+                error_layer <= layer_index;
+                state <= S_ERROR;
+              end else begin
+                previous_output_tensor_id <= active_output_tensor_id;
+                previous_output_width <= active_output_width;
+                previous_output_height <= active_output_height;
+                previous_output_channels <= 16'(active_output_channels);
+                previous_output_ddr_offset <= active_output_ddr_offset;
+                completed_layer_count <= completed_layer_count + 32'd1;
+                layer_done <= 1'b1;
+                state <= descriptor_is_final ?
+                  S_DONE : S_ADVANCE_LAYER;
+              end
+            end
+          end
+
+          S_ADVANCE_LAYER: begin
+            layer_index <= layer_index + 3'd1;
+            state <= S_CHECK_DESCRIPTOR;
+          end
+
+          S_DONE: begin
+            done <= 1'b1;
+            state <= S_IDLE;
+          end
+
+          S_ERROR: begin
+            done <= 1'b1;
+            state <= S_IDLE;
+          end
+
+          default: state <= S_IDLE;
+        endcase
+      end
+    end
+  end
+
+endmodule

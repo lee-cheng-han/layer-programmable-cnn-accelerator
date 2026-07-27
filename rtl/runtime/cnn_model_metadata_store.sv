@@ -52,6 +52,18 @@ module cnn_model_metadata_store #(
   output logic [7:0]  execution_dilation_x,
   output logic [7:0]  execution_activation,
   output logic [7:0]  execution_residual_mode,
+  output logic [15:0] execution_tile_height_hint,
+  output logic [15:0] execution_tile_width_hint,
+  output logic [63:0] execution_input_ddr_offset,
+  output logic [31:0] execution_input_allocation_size,
+  output logic [31:0] execution_input_row_stride,
+  output logic [31:0] execution_input_pixel_stride,
+  output logic [31:0] execution_input_channel_stride,
+  output logic [63:0] execution_output_ddr_offset,
+  output logic [31:0] execution_output_allocation_size,
+  output logic [31:0] execution_output_row_stride,
+  output logic [31:0] execution_output_pixel_stride,
+  output logic [31:0] execution_output_channel_stride,
 
   output logic [2:0]  staging_state,
   output logic        staging_bank,
@@ -117,11 +129,17 @@ module cnn_model_metadata_store #(
   logic [31:0] cached_layer_geometry [0:1][0:MAX_LAYERS-1];
   logic [31:0] cached_layer_padding [0:1][0:MAX_LAYERS-1];
   logic [31:0] cached_layer_postprocess [0:1][0:MAX_LAYERS-1];
+  logic [31:0] cached_layer_tile_hints [0:1][0:MAX_LAYERS-1];
 
   logic [31:0] cached_tensor_header [0:1][0:MAX_TENSORS-1];
   logic [31:0] cached_tensor_identity [0:1][0:MAX_TENSORS-1];
+  logic [63:0] cached_tensor_ddr_offset [0:1][0:MAX_TENSORS-1];
+  logic [31:0] cached_tensor_allocation_size [0:1][0:MAX_TENSORS-1];
   logic [31:0] cached_tensor_geometry [0:1][0:MAX_TENSORS-1];
   logic [31:0] cached_tensor_channels [0:1][0:MAX_TENSORS-1];
+  logic [31:0] cached_tensor_row_stride [0:1][0:MAX_TENSORS-1];
+  logic [31:0] cached_tensor_pixel_stride [0:1][0:MAX_TENSORS-1];
+  logic [31:0] cached_tensor_channel_stride [0:1][0:MAX_TENSORS-1];
 
   logic header_committed;
   logic [15:0] layer_committed_count;
@@ -172,6 +190,18 @@ module cnn_model_metadata_store #(
     execution_dilation_x = 8'd0;
     execution_activation = 8'd0;
     execution_residual_mode = 8'd0;
+    execution_tile_height_hint = 16'd0;
+    execution_tile_width_hint = 16'd0;
+    execution_input_ddr_offset = 64'd0;
+    execution_input_allocation_size = 32'd0;
+    execution_input_row_stride = 32'd0;
+    execution_input_pixel_stride = 32'd0;
+    execution_input_channel_stride = 32'd0;
+    execution_output_ddr_offset = 64'd0;
+    execution_output_allocation_size = 32'd0;
+    execution_output_row_stride = 32'd0;
+    execution_output_pixel_stride = 32'd0;
+    execution_output_channel_stride = 32'd0;
 
     layer_slot = int'(execution_layer_index);
     input_tensor_id = 16'd0;
@@ -223,6 +253,10 @@ module cnn_model_metadata_store #(
         cached_layer_postprocess[active_bank][layer_slot][23:16];
       execution_residual_mode =
         cached_layer_postprocess[active_bank][layer_slot][31:24];
+      execution_tile_height_hint =
+        cached_layer_tile_hints[active_bank][layer_slot][15:0];
+      execution_tile_width_hint =
+        cached_layer_tile_hints[active_bank][layer_slot][31:16];
 
       if ((input_slot < MAX_TENSORS) && (output_slot < MAX_TENSORS)) begin
         execution_input_width =
@@ -237,6 +271,26 @@ module cnn_model_metadata_store #(
           cached_tensor_geometry[active_bank][output_slot][31:16];
         execution_output_channels =
           cached_tensor_channels[active_bank][output_slot][15:0];
+        execution_input_ddr_offset =
+          cached_tensor_ddr_offset[active_bank][input_slot];
+        execution_input_allocation_size =
+          cached_tensor_allocation_size[active_bank][input_slot];
+        execution_input_row_stride =
+          cached_tensor_row_stride[active_bank][input_slot];
+        execution_input_pixel_stride =
+          cached_tensor_pixel_stride[active_bank][input_slot];
+        execution_input_channel_stride =
+          cached_tensor_channel_stride[active_bank][input_slot];
+        execution_output_ddr_offset =
+          cached_tensor_ddr_offset[active_bank][output_slot];
+        execution_output_allocation_size =
+          cached_tensor_allocation_size[active_bank][output_slot];
+        execution_output_row_stride =
+          cached_tensor_row_stride[active_bank][output_slot];
+        execution_output_pixel_stride =
+          cached_tensor_pixel_stride[active_bank][output_slot];
+        execution_output_channel_stride =
+          cached_tensor_channel_stride[active_bank][output_slot];
 
         execution_descriptor_valid =
           (cached_layer_header[active_bank][layer_slot] ==
@@ -517,6 +571,8 @@ module cnn_model_metadata_store #(
                       metadata_write_data;
                 12: cached_layer_postprocess[staging_bank][LAYER_INDEX_W'(metadata_record_index)] <=
                       metadata_write_data;
+                13: cached_layer_tile_hints[staging_bank][LAYER_INDEX_W'(metadata_record_index)] <=
+                      metadata_write_data;
                 default: begin
                 end
               endcase
@@ -539,10 +595,22 @@ module cnn_model_metadata_store #(
                      metadata_write_data;
                 1: cached_tensor_identity[staging_bank][TENSOR_INDEX_W'(metadata_record_index)] <=
                      metadata_write_data;
+                2: cached_tensor_ddr_offset[staging_bank][TENSOR_INDEX_W'(metadata_record_index)][31:0] <=
+                     metadata_write_data;
+                3: cached_tensor_ddr_offset[staging_bank][TENSOR_INDEX_W'(metadata_record_index)][63:32] <=
+                     metadata_write_data;
+                4: cached_tensor_allocation_size[staging_bank][TENSOR_INDEX_W'(metadata_record_index)] <=
+                     metadata_write_data;
                 5: cached_tensor_geometry[staging_bank][TENSOR_INDEX_W'(metadata_record_index)] <=
                      metadata_write_data;
                 6: cached_tensor_channels[staging_bank][TENSOR_INDEX_W'(metadata_record_index)] <=
                      metadata_write_data;
+                9: cached_tensor_row_stride[staging_bank][TENSOR_INDEX_W'(metadata_record_index)] <=
+                     metadata_write_data;
+                10: cached_tensor_pixel_stride[staging_bank][TENSOR_INDEX_W'(metadata_record_index)] <=
+                      metadata_write_data;
+                11: cached_tensor_channel_stride[staging_bank][TENSOR_INDEX_W'(metadata_record_index)] <=
+                      metadata_write_data;
                 default: begin
                 end
               endcase

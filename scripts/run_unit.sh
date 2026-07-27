@@ -13,6 +13,11 @@ TESTS=(
  tb_ping_pong_buffers
  tb_tensor_load_controllers
  tb_output_store_controller
+ tb_spatial_tile_planner
+ tb_halo_tile_load_controller
+ tb_tiled_layer_runtime
+ tb_tiled_layer_runtime_3x3_stride2
+ tb_tiled_multi_layer_controller
  tb_layer_descriptors
  tb_model_metadata_store
  tb_descriptor_driven_job_controller

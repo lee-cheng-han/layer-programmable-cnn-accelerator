@@ -76,6 +76,7 @@ module tb_packed_dma_runtime_router;
   logic activation_packet_ready;
   logic [31:0] activation_job_id;
   logic [15:0] activation_tensor_id;
+  logic [15:0] activation_layer_id;
   logic [15:0] activation_tile_x;
   logic [15:0] activation_tile_y;
   logic [15:0] activation_tile_width;
@@ -204,6 +205,7 @@ module tb_packed_dma_runtime_router;
     .activation_packet_ready(activation_packet_ready),
     .activation_job_id(activation_job_id),
     .activation_tensor_id(activation_tensor_id),
+    .activation_layer_id(activation_layer_id),
     .activation_tile_x(activation_tile_x),
     .activation_tile_y(activation_tile_y),
     .activation_tile_width(activation_tile_width),
@@ -460,6 +462,7 @@ module tb_packed_dma_runtime_router;
     check_value("activation start", activation_start_count, 1);
     check_value("activation job", int'(activation_job_id), 42);
     check_value("activation tensor", int'(activation_tensor_id), 9);
+    check_value("activation layer", int'(activation_layer_id), 3);
     check_value("activation x", int'(activation_tile_x), 5);
     check_value("activation y", int'(activation_tile_y), 6);
     check_value("activation width", int'(activation_tile_width), 7);

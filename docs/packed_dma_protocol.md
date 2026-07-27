@@ -4,9 +4,9 @@
 
 The programmable runtime uses a versioned 32-bit AXI-Stream packet format for
 activation tiles, layer parameters, and output tiles. The protocol RTL is
-implemented and verified independently of the preserved fixed-network board
-wrapper. Phase 8 will connect it to DDR-backed tiled execution in the Zybo
-block design.
+implemented and verified through the programmable tiled-layer runtime. The
+preserved fixed-network Zybo block design still uses its original packet path;
+board integration of the programmable runtime remains a separate step.
 
 Every packet consists of eight full header beats followed by an exact-length
 payload:
@@ -49,6 +49,42 @@ Packet types are:
 | 2 | `LAYER_WEIGHTS` | Packed signed INT8 weights in OIHW order |
 | 3 | `LAYER_BIASES` | One signed INT32 bias per 32-bit beat |
 | 4 | `OUTPUT_TILE` | Packed signed INT8 output bytes |
+
+## Tile Coordinate Contract
+
+For both `INPUT_TILE` and `OUTPUT_TILE`, `tile_x`, `tile_y`, `tile_width`, and
+`tile_height` identify a rectangle in the layer's **output** tensor. This keeps
+the packet coordinates unsigned even when a convolution receptive field begins
+above or to the left of the input tensor.
+
+An `INPUT_TILE` payload contains the clipped input receptive field needed for
+that output rectangle. Its elements are NHWC ordered over:
+
+```text
+source_y .. source_y + source_height - 1
+source_x .. source_x + source_width - 1
+channel_offset .. channel_offset + channel_count - 1
+```
+
+The runtime derives `source_x`, `source_y`, and the source dimensions from the
+active layer descriptor. Out-of-range halo positions are not transferred.
+`halo_tile_load_controller` clears the complete local receptive-field buffer,
+then places the clipped payload at its derived local X/Y offset. Untransferred
+top, left, right, and bottom halo cells therefore read as signed INT8 zero.
+
+V1 tiled execution currently requires one complete input-channel range per
+tile: `channel_offset=0` and `channel_count=Cin`. Its exact input byte count is:
+
+```text
+source_width * source_height * Cin
+```
+
+An `OUTPUT_TILE` payload is ordinary NHWC output data for the header rectangle,
+with exact length:
+
+```text
+tile_width * tile_height * Cout
+```
 
 ## Payload Framing
 
@@ -104,6 +140,9 @@ Previously validated banks remain isolated.
 | `packed_dma_packet_parser` | Header validation, exact byte accounting, framing checks, and recovery |
 | `packed_dma_runtime_router` | Activation routing, weight serialization, bias forwarding, and parameter abort |
 | `packed_dma_packet_writer` | Output header generation and INT8 byte packing |
+| `spatial_tile_planner` | Output-tile enumeration and clipped receptive-field/halo geometry |
+| `halo_tile_load_controller` | Tile-context validation, zero fill, packed-byte placement, and scratchpad write flush |
+| `cnn_tiled_layer_runtime` | Parameter acquisition, tile ingress, local compute, and packed tile egress |
 
 Run:
 
@@ -111,8 +150,10 @@ Run:
 make packed-dma-test
 make packed-dma-runtime-test
 make packed-dma-writer-test
+make tile-test
 ```
 
 The tests cover partial final beats, lane order, input/output backpressure,
 metadata, parameter CRC completion, semantic rejection, malformed-packet
-abort, and successful recovery.
+abort, halo and boundary geometry, malformed tile metadata, end-to-end
+multi-tile golden output, output backpressure, and successful recovery.

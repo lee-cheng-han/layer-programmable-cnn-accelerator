@@ -113,9 +113,17 @@ scratchpad-backed parameter banks now enforce exact lengths and ABI CRC32,
 retain layer-tagged bias/quantization state, and overlap prefetch with compute.
 A packed, versioned DMA data plane now validates exact byte lengths,
 `TKEEP`/`TLAST`, tile metadata, packet recovery, parameter loading, and packed
-output generation. The next milestone is DDR-backed spatial tiling and halo
-handling that connects this programmable path to the board-facing stream
-system.
+output generation. The first DDR-backed tiling slice now plans 16x16 output
+tiles, derives clipped receptive fields, reconstructs zero-padded halos in a
+local banked scratchpad, executes a layer through the reusable compute and
+parameter interfaces, and emits packed output tiles under backpressure. Both
+1x1 and 3x3 stride-2 multi-tile golden paths pass. A multi-layer tiled
+controller now walks active descriptors, validates DDR tensor handoffs,
+recycles parameter banks, and exposes software-visible tile requests and
+progress. Its two-layer packed-DMA golden flow and invalid-chain rejection
+pass. See [tiled execution](docs/tiled_execution.md). Direct metadata-store
+wiring, DDR gather/scatter software, and board-facing programmable-runtime
+integration remain.
 
 The control plane also exposes versioned
 [capability discovery and structured errors](docs/capability_and_errors.md).
@@ -236,8 +244,9 @@ eight-word versioned header followed by exact-length payload bytes, with four
 INT8 elements per 32-bit beat, low-lane `TKEEP`, and `TLAST` on the final beat.
 It carries tensor/layer IDs, tile coordinates, channel ranges, and job IDs.
 See [packed_dma_protocol.md](docs/packed_dma_protocol.md). This path is
-pre-integration RTL evidence; the generated board bitstream continues to use
-the seven-packet contract above until Phase 8.
+integrated through the programmable multi-layer tiled runtime in RTL; the
+generated board bitstream continues to use the preserved seven-packet contract
+until metadata-store and board integration are complete.
 
 ## Repository Layout
 

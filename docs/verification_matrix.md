@@ -50,6 +50,8 @@
 | descriptor-driven execution | High pre-integration | active-bank four-layer golden flow, eight-layer boundary flow, and negative tests under Verilator CI |
 | reusable runtime parameters | High pre-integration | bank-level negative tests plus integrated eight-layer scratchpad-backed execution |
 | packed programmable DMA protocol | High pre-integration | parser/router/bank and output-writer tests with malformed packet recovery |
+| DDR-backed spatial tiling | High pre-integration | directed plus randomized geometry, real halo scratchpad loader, multi-tile 1x1 and 3x3 stride-2 golden output, active DDR metadata, and AXI backpressure |
+| multi-layer tiled execution | High pre-integration | two-layer packed tile flow through reusable parameters, DDR tensor handoff validation, progress, and negative chain rejection |
 | Zynq block design integration | High pre-board | bitstream and XSA generated at 125 MHz |
 | bare-metal DMA integration | High pre-board | Vitis app and BOOT.BIN build from XSA |
 | real hardware behavior | Pending | board not yet available |
@@ -64,6 +66,7 @@ make programmable-engine-test
 make packed-dma-test
 make packed-dma-runtime-test
 make packed-dma-writer-test
+make tile-test
 make golden-test
 make unit
 make regression

@@ -62,6 +62,7 @@ module packed_dma_runtime_router (
   input  logic activation_packet_ready,
   output logic [31:0] activation_job_id,
   output logic [15:0] activation_tensor_id,
+  output logic [15:0] activation_layer_id,
   output logic [15:0] activation_tile_x,
   output logic [15:0] activation_tile_y,
   output logic [15:0] activation_tile_width,
@@ -212,6 +213,7 @@ module packed_dma_runtime_router (
       activation_packet_start <= 1'b0;
       activation_job_id <= '0;
       activation_tensor_id <= '0;
+      activation_layer_id <= '0;
       activation_tile_x <= '0;
       activation_tile_y <= '0;
       activation_tile_width <= '0;
@@ -253,6 +255,7 @@ module packed_dma_runtime_router (
                        packet_type == DMA_PACKET_INPUT_TILE) begin
             activation_job_id <= packet_job_id;
             activation_tensor_id <= packet_tensor_id;
+            activation_layer_id <= packet_layer_id;
             activation_tile_x <= packet_tile_x;
             activation_tile_y <= packet_tile_y;
             activation_tile_width <= packet_tile_width;

@@ -35,6 +35,19 @@ module tb_model_metadata_store;
   logic [15:0] staging_tensor_count;
   logic [15:0] staging_quantization_count;
   logic [7:0] lifecycle_error;
+  logic execution_descriptor_valid;
+  logic [15:0] execution_tile_height_hint;
+  logic [15:0] execution_tile_width_hint;
+  logic [63:0] execution_input_ddr_offset;
+  logic [31:0] execution_input_allocation_size;
+  logic [31:0] execution_input_row_stride;
+  logic [31:0] execution_input_pixel_stride;
+  logic [31:0] execution_input_channel_stride;
+  logic [63:0] execution_output_ddr_offset;
+  logic [31:0] execution_output_allocation_size;
+  logic [31:0] execution_output_row_stride;
+  logic [31:0] execution_output_pixel_stride;
+  logic [31:0] execution_output_channel_stride;
 
   int checks;
   int errors;
@@ -61,7 +74,7 @@ module tb_model_metadata_store;
     .metadata_write_data(metadata_write_data),
     .metadata_read_data(metadata_read_data),
     .execution_layer_index(3'd0),
-    .execution_descriptor_valid(),
+    .execution_descriptor_valid(execution_descriptor_valid),
     .execution_layer_id(),
     .execution_opcode(),
     .execution_last_layer(),
@@ -88,6 +101,18 @@ module tb_model_metadata_store;
     .execution_dilation_x(),
     .execution_activation(),
     .execution_residual_mode(),
+    .execution_tile_height_hint(execution_tile_height_hint),
+    .execution_tile_width_hint(execution_tile_width_hint),
+    .execution_input_ddr_offset(execution_input_ddr_offset),
+    .execution_input_allocation_size(execution_input_allocation_size),
+    .execution_input_row_stride(execution_input_row_stride),
+    .execution_input_pixel_stride(execution_input_pixel_stride),
+    .execution_input_channel_stride(execution_input_channel_stride),
+    .execution_output_ddr_offset(execution_output_ddr_offset),
+    .execution_output_allocation_size(execution_output_allocation_size),
+    .execution_output_row_stride(execution_output_row_stride),
+    .execution_output_pixel_stride(execution_output_pixel_stride),
+    .execution_output_channel_stride(execution_output_channel_stride),
     .staging_state(staging_state),
     .staging_bank(staging_bank),
     .active_valid(active_valid),
@@ -197,13 +222,39 @@ module tb_model_metadata_store;
         corrupt_layer_header ? 32'h0040_0001 : 32'h0080_0001
       );
       write_word(METADATA_LAYER, 0, 1, 32'h0001_0000);
+      write_word(METADATA_LAYER, 0, 2, 32'h0000_0002);
+      write_word(METADATA_LAYER, 0, 3, 32'h0001_0000);
+      write_word(METADATA_LAYER, 0, 4, 32'h0000_FFFF);
+      write_word(METADATA_LAYER, 0, 10, 32'h0101_0303);
+      write_word(METADATA_LAYER, 0, 11, 32'h0101_0101);
+      write_word(METADATA_LAYER, 0, 12, 32'h0000_0101);
+      write_word(
+        METADATA_LAYER, 0, 13,
+        {16'(generation_id + 6), 16'(generation_id + 4)}
+      );
       commit_record(METADATA_LAYER, 0);
 
       write_word(METADATA_TENSOR, 0, 0, 32'h0040_0001);
       write_word(METADATA_TENSOR, 0, 1, 32'h0001_0000);
+      write_word(METADATA_TENSOR, 0, 2, 32'h0000_1000 + (generation_id << 8));
+      write_word(METADATA_TENSOR, 0, 3, 32'd0);
+      write_word(METADATA_TENSOR, 0, 4, 32'd4096);
+      write_word(METADATA_TENSOR, 0, 5, 32'h0005_0005);
+      write_word(METADATA_TENSOR, 0, 6, 32'h0101_0001);
+      write_word(METADATA_TENSOR, 0, 9, 32'd5);
+      write_word(METADATA_TENSOR, 0, 10, 32'd1);
+      write_word(METADATA_TENSOR, 0, 11, 32'd1);
       commit_record(METADATA_TENSOR, 0);
       write_word(METADATA_TENSOR, 1, 0, 32'h0040_0001);
       write_word(METADATA_TENSOR, 1, 1, 32'h0002_0001);
+      write_word(METADATA_TENSOR, 1, 2, 32'h0000_2000 + (generation_id << 8));
+      write_word(METADATA_TENSOR, 1, 3, 32'd0);
+      write_word(METADATA_TENSOR, 1, 4, 32'd8192);
+      write_word(METADATA_TENSOR, 1, 5, 32'h0005_0005);
+      write_word(METADATA_TENSOR, 1, 6, 32'h0101_0001);
+      write_word(METADATA_TENSOR, 1, 9, 32'd5);
+      write_word(METADATA_TENSOR, 1, 10, 32'd1);
+      write_word(METADATA_TENSOR, 1, 11, 32'd1);
       commit_record(METADATA_TENSOR, 1);
 
       write_word(METADATA_QUANTIZATION, 0, 0, 32'h00C0_0001);
@@ -260,6 +311,22 @@ module tb_model_metadata_store;
     check_eq("first active bank", active_bank, 1);
     check_eq("first active model", active_model_id, 11);
     check_eq("first active generation", active_generation_id, 1);
+    check_eq("first descriptor valid", execution_descriptor_valid, 1);
+    check_eq("first tile height hint", execution_tile_height_hint, 5);
+    check_eq("first tile width hint", execution_tile_width_hint, 7);
+    check_eq("first input DDR offset low", execution_input_ddr_offset[31:0],
+             32'h0000_1100);
+    check_eq("first input DDR offset high", execution_input_ddr_offset[63:32], 0);
+    check_eq("first input allocation", execution_input_allocation_size, 4096);
+    check_eq("first input row stride", execution_input_row_stride, 5);
+    check_eq("first input pixel stride", execution_input_pixel_stride, 1);
+    check_eq("first input channel stride", execution_input_channel_stride, 1);
+    check_eq("first output DDR offset low", execution_output_ddr_offset[31:0],
+             32'h0000_2100);
+    check_eq("first output allocation", execution_output_allocation_size, 8192);
+    check_eq("first output row stride", execution_output_row_stride, 5);
+    check_eq("first output pixel stride", execution_output_pixel_stride, 1);
+    check_eq("first output channel stride", execution_output_channel_stride, 1);
 
     pulse_command(0);
     check_eq("replacement uses other bank", staging_bank, 0);
@@ -269,6 +336,10 @@ module tb_model_metadata_store;
     check_eq("incomplete validation error", lifecycle_error, 4);
     check_eq("incomplete replacement leaves active model", active_model_id, 11);
     check_eq("incomplete replacement leaves active generation", active_generation_id, 1);
+    check_eq("incomplete replacement leaves tile hint",
+             execution_tile_width_hint, 7);
+    check_eq("incomplete replacement leaves input offset",
+             execution_input_ddr_offset[31:0], 32'h0000_1100);
 
     pulse_command(0);
     load_minimal_model(32'd22, 32'd2, 1'b1, 1'b0);
@@ -284,6 +355,12 @@ module tb_model_metadata_store;
     check_eq("replacement active bank", active_bank, 0);
     check_eq("replacement active model", active_model_id, 22);
     check_eq("replacement active generation", active_generation_id, 2);
+    check_eq("replacement tile height", execution_tile_height_hint, 6);
+    check_eq("replacement tile width", execution_tile_width_hint, 8);
+    check_eq("replacement input offset", execution_input_ddr_offset[31:0],
+             32'h0000_1200);
+    check_eq("replacement output offset", execution_output_ddr_offset[31:0],
+             32'h0000_2200);
 
     pulse_command(0);
     load_minimal_model(32'd33, 32'd3, 1'b1, 1'b1);

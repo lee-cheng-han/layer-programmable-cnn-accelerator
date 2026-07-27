@@ -193,6 +193,10 @@ tensor_workspace_base + ddr_offset
   + c * channel_stride
 ```
 
+The RTL metadata store caches these address fields for both tensors referenced
+by the selected active layer. Tile hints and DDR layout therefore participate
+in the same staged validation and atomic bank activation as layer geometry.
+
 The model compiler owns lifetime analysis and may assign overlapping DDR
 allocations only when tensor lifetimes do not overlap.
 

@@ -3,8 +3,9 @@
 This document defines the preserved fixed-network stream contract currently
 used by the board-facing image-to-image path. The programmable runtime's
 implemented packed V1 protocol is specified separately in
-[packed_dma_protocol.md](packed_dma_protocol.md); it becomes board-facing with
-DDR-backed tiled execution in Phase 8.
+[packed_dma_protocol.md](packed_dma_protocol.md). The packed protocol now
+drives a programmable single-layer tiled runtime in RTL but is not yet the
+board-facing stream contract.
 
 The current wrapper uses four logical ready/valid streams:
 
