@@ -445,7 +445,7 @@ module tb_packed_dma_runtime_router;
     rst_n = 1'b1;
     repeat (2) @(posedge clk);
 
-    send_header(DMA_PACKET_INPUT_TILE, 0, 6);
+    send_header(DMA_PACKET_INPUT_TILE, 3, 6);
     activation_ready = 1'b0;
     fork
       begin
