@@ -70,6 +70,7 @@ xvlog -sv -L work \
  ../../rtl/runtime/cnn_programmable_job_engine.sv \
  ../../rtl/runtime/cnn_tiled_layer_runtime.sv \
  ../../rtl/runtime/cnn_tiled_multi_layer_controller.sv \
+ ../../rtl/runtime/cnn_programmable_runtime_top.sv \
  ../../rtl/scheduler/denoise_layer_descriptor_rom.sv \
  ../../rtl/scheduler/performance_counters.sv \
  ../../rtl/compute/reduction_tree.sv \

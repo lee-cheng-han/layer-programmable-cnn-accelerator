@@ -92,6 +92,7 @@ Input RGB tensor
 | `packed_dma_packet_writer` | Packs output bytes and generates versioned `OUTPUT_TILE` packets |
 | `cnn_tiled_layer_runtime` | Loads halo-aware input tiles, runs a descriptor layer, and emits packed output tiles |
 | `cnn_tiled_multi_layer_controller` | Validates descriptor chains and sequences tiled layers through reusable parameter banks |
+| `cnn_programmable_runtime_top` | Integrates active metadata, packed DMA routing, reusable parameters, and tiled multi-layer execution |
 | `tensor_packet_router` | Validates and routes the seven-packet tensor input stream |
 | `stream_loaded_multi_layer_job_controller` | Loads tensors, overlaps parameter prefetch, and runs the 3-layer job |
 | `single_layer_scheduler` | Reuses 1x1/3x3 tiled engines across image positions |
@@ -104,9 +105,10 @@ The current board path uses `stream_loaded_multi_layer_job_controller`. The
 parallel layer-programmable path connects the active view from
 `cnn_model_metadata_store` through `cnn_programmable_job_engine` to two runtime
 parameter banks and has eight-layer controller plus two-layer tiled golden RTL
-evidence. It becomes board-facing after the multi-layer tiled controller is
-wired directly to active metadata, DDR gather/scatter software, and the Zynq
-stream wrapper.
+evidence. `cnn_programmable_runtime_top` now closes those standalone blocks
+into one model-to-output data path. It becomes board-facing after its lifecycle
+and progress ports are bridged into AXI-Lite, DDR gather/scatter software is
+added, and the Zynq stream wrapper selects it.
 The generated board bitstream still uses the preserved fixed-network
 seven-packet path.
 

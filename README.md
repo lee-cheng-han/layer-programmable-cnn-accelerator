@@ -121,9 +121,14 @@ parameter interfaces, and emits packed output tiles under backpressure. Both
 controller now walks active descriptors, validates DDR tensor handoffs,
 recycles parameter banks, and exposes software-visible tile requests and
 progress. Its two-layer packed-DMA golden flow and invalid-chain rejection
-pass. See [tiled execution](docs/tiled_execution.md). Direct metadata-store
-wiring, DDR gather/scatter software, and board-facing programmable-runtime
-integration remain.
+pass. An integrated programmable runtime now connects atomic metadata,
+descriptor-derived parameter validation, packed ingress, reusable banks, tiled
+execution, and packed egress in one synthesizable top; its model-to-output
+golden flow passes. See [tiled execution](docs/tiled_execution.md). AXI-Lite
+bridging, DDR gather/scatter software, and board-facing integration remain.
+The prioritized completion gates, including numeric integration, diagnostics,
+implementation closure, and final demonstration evidence, are tracked in the
+[engineering completion plan](docs/layer_programmable_roadmap.md#engineering-completion-plan).
 
 The control plane also exposes versioned
 [capability discovery and structured errors](docs/capability_and_errors.md).

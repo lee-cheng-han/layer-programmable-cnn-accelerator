@@ -23,12 +23,17 @@ software can gather each requested source rectangle and scatter each output
 tile. The current integration remains software/DMA managed; autonomous DDR
 fetching is a later optional milestone.
 
+`cnn_programmable_runtime_top` now integrates the metadata store, packed packet
+parser/router, reusable parameter banks, and multi-layer tiled controller. Its
+parameter loader configuration comes from the selected active descriptor,
+including exact weight/bias sizes and the ABI parameter CRC32. Software may
+select a layer while the job is idle, load its parameters through packed DMA,
+then start execution without external RTL configuration sidebands.
+
 The atomically active metadata view exposes each layer's tile height/width
 hints and both tensors' 64-bit DDR offset, allocation size, row stride, pixel
-stride, and channel stride. These fields switch banks atomically with the rest
-of the validated model. The multi-layer controller consumes that active-view
-contract through explicit descriptor ports; direct top-level wiring to the
-metadata store remains a board-integration task.
+stride, and channel stride, plus exact parameter sizes and CRC32. These fields
+switch banks atomically with the rest of the validated model.
 
 ## Geometry
 
@@ -104,6 +109,11 @@ the real tiled runtime and reusable parameter scratchpad. It verifies packed
 tile payloads and tensor IDs across a DDR tensor handoff, then proves that a
 mismatched next-layer DDR offset is rejected before that layer starts.
 
+`tb_programmable_runtime_top` stages, validates, and atomically activates a
+model; loads CRC-checked weights through the packed AXI stream; starts the
+descriptor-driven job; sends two input tiles; and checks both packed output
+packets. No metadata, parameter, or activation interface is bypassed.
+
 Run:
 
 ```bash
@@ -112,8 +122,8 @@ make tile-test
 
 ## Remaining Integration Work
 
-- Connect `cnn_model_metadata_store` directly to
-  `cnn_tiled_multi_layer_controller` in the programmable system top.
+- Bridge the integrated programmable runtime controls and status to the
+  board-facing AXI-Lite register block.
 - Add software scheduling that gathers clipped NHWC source rectangles from
   DDR and scatters output tiles back into DDR tensors.
 - Add randomized multi-layer runtime payload/backpressure and malformed-packet

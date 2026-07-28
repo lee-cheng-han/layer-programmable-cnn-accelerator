@@ -34,6 +34,9 @@ module cnn_model_metadata_store #(
   output logic [15:0] execution_output_tensor_id,
   output logic [15:0] execution_residual_tensor_id,
   output logic [15:0] execution_quantization_id,
+  output logic [31:0] execution_weight_size,
+  output logic [31:0] execution_bias_size,
+  output logic [31:0] execution_parameter_crc32,
   output logic [15:0] execution_input_width,
   output logic [15:0] execution_input_height,
   output logic [15:0] execution_input_channels,
@@ -126,6 +129,9 @@ module cnn_model_metadata_store #(
   logic [31:0] cached_layer_flags [0:1][0:MAX_LAYERS-1];
   logic [31:0] cached_layer_tensor_ids [0:1][0:MAX_LAYERS-1];
   logic [31:0] cached_layer_residual_quant [0:1][0:MAX_LAYERS-1];
+  logic [31:0] cached_layer_weight_size [0:1][0:MAX_LAYERS-1];
+  logic [31:0] cached_layer_bias_size [0:1][0:MAX_LAYERS-1];
+  logic [31:0] cached_layer_parameter_crc32 [0:1][0:MAX_LAYERS-1];
   logic [31:0] cached_layer_geometry [0:1][0:MAX_LAYERS-1];
   logic [31:0] cached_layer_padding [0:1][0:MAX_LAYERS-1];
   logic [31:0] cached_layer_postprocess [0:1][0:MAX_LAYERS-1];
@@ -172,6 +178,9 @@ module cnn_model_metadata_store #(
     execution_output_tensor_id = 16'd0;
     execution_residual_tensor_id = NO_TENSOR_ID;
     execution_quantization_id = 16'd0;
+    execution_weight_size = 32'd0;
+    execution_bias_size = 32'd0;
+    execution_parameter_crc32 = 32'd0;
     execution_input_width = 16'd0;
     execution_input_height = 16'd0;
     execution_input_channels = 16'd0;
@@ -229,6 +238,12 @@ module cnn_model_metadata_store #(
         cached_layer_residual_quant[active_bank][layer_slot][15:0];
       execution_quantization_id =
         cached_layer_residual_quant[active_bank][layer_slot][31:16];
+      execution_weight_size =
+        cached_layer_weight_size[active_bank][layer_slot];
+      execution_bias_size =
+        cached_layer_bias_size[active_bank][layer_slot];
+      execution_parameter_crc32 =
+        cached_layer_parameter_crc32[active_bank][layer_slot];
       execution_kernel_height =
         cached_layer_geometry[active_bank][layer_slot][7:0];
       execution_kernel_width =
@@ -564,6 +579,12 @@ module cnn_model_metadata_store #(
                 3: cached_layer_tensor_ids[staging_bank][LAYER_INDEX_W'(metadata_record_index)] <=
                      metadata_write_data;
                 4: cached_layer_residual_quant[staging_bank][LAYER_INDEX_W'(metadata_record_index)] <=
+                     metadata_write_data;
+                6: cached_layer_weight_size[staging_bank][LAYER_INDEX_W'(metadata_record_index)] <=
+                     metadata_write_data;
+                8: cached_layer_bias_size[staging_bank][LAYER_INDEX_W'(metadata_record_index)] <=
+                     metadata_write_data;
+                9: cached_layer_parameter_crc32[staging_bank][LAYER_INDEX_W'(metadata_record_index)] <=
                      metadata_write_data;
                 10: cached_layer_geometry[staging_bank][LAYER_INDEX_W'(metadata_record_index)] <=
                       metadata_write_data;

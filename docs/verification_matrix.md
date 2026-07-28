@@ -39,21 +39,22 @@
 | 1x1 convolution | High | tiled engine tests and scheduler tests |
 | 3x3 convolution | High | address generator, tiled engine, scheduler, and full-network golden tests |
 | runtime channel tails | High | directed PC/PK tail cases; V1 intentionally uses no special RGB channel packing |
-| bias, ReLU, quantization, saturation | High | Python model and parallel requantizer RTL tests cover per-channel scales, ties, and clipping |
-| residual numeric domain | High | post-requantization signed INT8 add/subtract with signed INT8 saturation |
+| bias, ReLU, quantization, saturation | High standalone; partial integration | Python model and parallel requantizer cover per-channel scales, ties, and clipping; integrated tiled runtime still uses scalar shift configuration |
+| residual numeric domain | High standalone; pending tiled integration | post-requantization signed INT8 add/subtract and saturation are specified and tested outside the integrated tiled runtime |
 | bandwidth feasibility | Analytical | worked 1024x1024 3x3 and 1x1 budgets in `docs/bandwidth_budget.md` |
 | stream-loaded activations/weights/biases | High | stream-loaded full-network golden flow |
 | seven-packet AXI tensor job | High | AXI stream full-network golden flow |
 | output backpressure | High | stream-loaded and AXI stream golden flows |
-| AXI-Lite control/status/performance registers | High pre-board | integrated system wrapper and Vitis app build against exported XSA |
+| AXI-Lite control/status/performance registers | High fixed baseline; programmable bridge pending | fixed system wrapper and Vitis app build against exported XSA |
 | runtime metadata lifecycle | High pre-board | standalone lifecycle test plus complete AXI-Lite metadata load and activation |
 | descriptor-driven execution | High pre-integration | active-bank four-layer golden flow, eight-layer boundary flow, and negative tests under Verilator CI |
 | reusable runtime parameters | High pre-integration | bank-level negative tests plus integrated eight-layer scratchpad-backed execution |
 | packed programmable DMA protocol | High pre-integration | parser/router/bank and output-writer tests with malformed packet recovery |
 | DDR-backed spatial tiling | High pre-integration | directed plus randomized geometry, real halo scratchpad loader, multi-tile 1x1 and 3x3 stride-2 golden output, active DDR metadata, and AXI backpressure |
 | multi-layer tiled execution | High pre-integration | two-layer packed tile flow through reusable parameters, DDR tensor handoff validation, progress, and negative chain rejection |
-| Zynq block design integration | High pre-board | bitstream and XSA generated at 125 MHz |
-| bare-metal DMA integration | High pre-board | Vitis app and BOOT.BIN build from XSA |
+| integrated programmable runtime | High pre-board | atomic model activation, descriptor-derived parameter CRC validation, packed tile ingress, real compute, and packed output in one RTL top |
+| Zynq block design integration | High fixed baseline; programmable replacement pending | fixed-path bitstream and XSA generated at 125 MHz |
+| bare-metal DMA integration | High fixed baseline; programmable tile software pending | fixed-path Vitis app and BOOT.BIN build from XSA |
 | real hardware behavior | Pending | board not yet available |
 
 ## Main Regression Commands
@@ -67,6 +68,7 @@ make packed-dma-test
 make packed-dma-runtime-test
 make packed-dma-writer-test
 make tile-test
+make programmable-runtime-test
 make golden-test
 make unit
 make regression

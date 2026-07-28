@@ -13,14 +13,14 @@ atomically activated, and reused across multiple images.
 | Phase | Deliverable | Status |
 |---:|---|---|
 | 0 | Preserve fixed-network board baseline and evidence | Complete; physical board validation pending |
-| 1 | Freeze exact V1 model-package ABI | Complete, including per-channel requantization |
+| 1 | Freeze exact V1 model-package ABI | Complete; per-channel numeric contract frozen |
 | 2 | Build model compiler and package-level bit-accurate executor | Complete |
-| 3 | Add capability discovery and structured errors | Complete |
+| 3 | Add capability discovery and structured errors | Baseline complete; programmable-stage propagation remains |
 | 4 | Add runtime metadata memories and atomic model lifecycle | Complete |
 | 5 | Generalize descriptor-driven layer execution control | Complete |
 | 6 | Add reusable active/prefetch parameter banks | Complete |
 | 7 | Introduce packed, versioned DMA protocol | Complete |
-| 8 | Implement DDR-backed spatial tiling and halo handling | In progress; single-layer tiled RTL path complete |
+| 8 | Implement DDR-backed spatial tiling and halo handling | RTL complete through integrated software-managed tile interface |
 | 9 | Complete residual and quantization behavior in runtime RTL | Planned |
 | 10 | Build runtime software and connect interrupts | Planned |
 | 11 | Add autonomous DDR fetching | Planned |
@@ -74,10 +74,71 @@ boundaries, partial packets, and AXI backpressure. A two-layer packed flow also
 proves tensor-ID preservation, software-managed DDR handoff, progress, and
 invalid-chain rejection. The atomically active metadata view exports layer
 tile hints and complete input/output DDR offset/allocation/stride records.
-Direct metadata-store wiring, software DDR gather/scatter, board integration,
-and randomized multi-layer payload coverage remain. The planner itself has
-deterministic randomized geometry coverage. See
-[tiled_execution.md](tiled_execution.md).
+Software DDR gather/scatter, board integration, and randomized multi-layer
+payload coverage remain. The planner itself has deterministic randomized
+geometry coverage. See [tiled_execution.md](tiled_execution.md).
+
+The first integrated programmable runtime top now closes the active metadata
+store, packed parser/router, CRC-checked reusable parameter banks, and tiled
+multi-layer controller into one synthesizable data path. Its golden test loads
+and activates a model, streams parameters and tiles, and verifies packed
+output. AXI-Lite bridging, DDR gather/scatter software, and board-wrapper
+selection remain before this path replaces the fixed-network baseline.
+
+## Engineering Completion Plan
+
+This table is the canonical remaining-work view. A status of **Implemented**
+means the repository contains integrated evidence for that scope, not merely a
+documented interface or an isolated module.
+
+| Priority | Improvement | Current state | Completion gate |
+|---:|---|---|---|
+| 1 | Converge on one production architecture | In progress | Programmable runtime replaces the fixed seven-packet path in the Zybo block design; legacy execution RTL and software are retired after regression parity |
+| 2 | Complete per-channel quantization | Partial | Active quantization descriptors drive per-output-channel multiplier/shift, round-half-to-even, saturation, and zero-point checks through the integrated tiled runtime |
+| 3 | Implement DDR tile scheduling | RTL interface implemented; software pending | Bare-metal software gathers clipped NHWC source rectangles, submits DMA packets, scatters outputs, manages intermediate tensors and caches, and times out safely |
+| 4 | Strengthen integrated verification | Partial | Deterministic randomized 1-8-layer package-to-output tests cover mixed kernels, strides, padding, tails, backpressure, partial beats, CRC faults, malformed packets, and model replacement |
+| 5 | Improve structured error propagation | Partial | First-failure records identify subsystem, model generation, layer, tensor, tile, field, observed value, and expected range for every programmable-runtime failure |
+| 6 | Add runtime observability | Partial | Per-layer/tile cycles, compute utilization, DMA starvation, output stalls, parameter stalls, bytes, MACs, and saturation events are software-visible and tested |
+| 7 | Run implementation experiments early | Baseline implemented; programmable top pending | Programmable board top passes multiple implementation seeds at 125 MHz with positive timing margin and archived timing, utilization, congestion, and critical-path reports |
+| 8 | Harden the software ABI | Partial | One machine-readable schema generates Python, C, and SystemVerilog constants/records; CI checks generated files and compile-time sizes |
+| 9 | Separate fast and licensed CI | Implemented for current scope | Open-source lint/model/docs jobs run on each push; licensed Vivado proof runs separately and publishes simulation/flow evidence |
+| 10 | Produce a final demonstration | Planned | 224x224 and 512x512 examples include input/output images, measured latency/throughput, device view, UART transcript, and ILA evidence |
+
+### Existing Evidence Mapped To The Plan
+
+- The integrated programmable runtime already closes atomic metadata,
+  descriptor-derived parameter CRC validation, packed DMA routing, reusable
+  banks, tiled execution, and packed output.
+- The compiler, package executor, ABI records, and standalone requantizer
+  already implement per-output-channel fixed-point math and round-half-to-even.
+  The remaining quantization work is integration, not specification.
+- Directed and deterministic-randomized geometry, halo, protocol, controller,
+  parameter-bank, and golden-network tests already provide the base for the
+  expanded randomized campaign.
+- Capability records, structured-error snapshots, performance counters,
+  warning budgets, synthesis sweeps, separate CI workflows, and generated
+  evidence reports already exist. They must be extended to the programmable
+  board path rather than recreated.
+
+## Remaining Major Milestones
+
+1. **Programmable control and board integration:** bridge the integrated
+   runtime into AXI-Lite, replace the fixed stream core, run synthesis and
+   implementation, and retain timing margin at 125 MHz.
+2. **DDR-backed runtime software:** load active packages and parameters, gather
+   halo-aware tiles, operate AXI DMA, scatter outputs, maintain caches, and
+   recover from timeouts.
+3. **Numeric-path completion:** connect per-channel quantization descriptors,
+   residual add/subtract, saturation behavior, and saturation counters to the
+   integrated runtime.
+4. **Verification and diagnostics hardening:** add randomized multi-layer
+   package flows, fault recovery, structured programmable errors, and detailed
+   performance counters.
+5. **Programmable implementation closure:** run multiple seeds, archive
+   physical reports, resolve congestion or critical paths, and generate the
+   final bitstream/XSA/BOOT.BIN baseline.
+6. **Physical-board validation and demonstration:** capture correctness,
+   UART/ILA/device evidence, and measured 224x224/512x512 performance.
 
 ## Final Workflow
 
