@@ -124,13 +124,19 @@ progress. Its two-layer packed-DMA golden flow and invalid-chain rejection
 pass. An integrated programmable runtime now connects atomic metadata,
 descriptor-derived parameter validation, packed ingress, reusable banks, tiled
 execution, and packed egress in one synthesizable top; its model-to-output
-golden flow passes. See [tiled execution](docs/tiled_execution.md). AXI-Lite
-bridging, DDR gather/scatter software, and board-facing integration remain.
+golden flow passes. See [tiled execution](docs/tiled_execution.md). DDR
+gather/scatter software and board-facing implementation remain.
 The prioritized completion gates, including numeric integration, diagnostics,
 implementation closure, and final demonstration evidence, are tracked in the
 [engineering completion plan](docs/layer_programmable_roadmap.md#engineering-completion-plan).
 
-The control plane also exposes versioned
+The programmable path now also has a versioned
+[AXI-Lite control plane](docs/programmable_control_plane.md) and a
+`TKEEP`-aware Vivado module-reference wrapper. Its golden system test performs
+model lifecycle, metadata loading, parameter selection, job launch, and
+progress readback through AXI-Lite while tensors use packed AXI-Stream.
+
+The currently generated fixed-board control plane also exposes versioned
 [capability discovery and structured errors](docs/capability_and_errors.md).
 It advertises runtime metadata storage while continuing to identify itself as
 the fixed-network baseline and withholding complete runtime package support.

@@ -4,7 +4,7 @@ TB ?= tb_axi_stream_full_network_golden_flow
 VITIS_DATA_DIR ?= $(CURDIR)/build/vitis_data
 
 .PHONY: xsim regression xsim-regression lint clean flow-report report-flow check-warnings docs-check preboard-proof
-.PHONY: unit tile-test programmable-runtime-test descriptor-test parameter-bank-test programmable-engine-test packed-dma-test packed-dma-runtime-test packed-dma-writer-test model-test model-package-example golden-test synth-sweep synth-report
+.PHONY: unit tile-test programmable-runtime-test programmable-system-test descriptor-test parameter-bank-test programmable-engine-test packed-dma-test packed-dma-runtime-test packed-dma-writer-test model-test model-package-example golden-test synth-sweep synth-report
 .PHONY: top-impl top-report baremetal-headers vitis-app
 .PHONY: zybo-z7-project zybo-z7-bitstream zybo-z7-xsa full-zybo-z7-flow
 .PHONY: boot-image full-preboard-proof program-zybo-z7
@@ -26,6 +26,9 @@ tile-test:
 
 programmable-runtime-test:
 	bash scripts/run_programmable_runtime_tb.sh
+
+programmable-system-test:
+	bash scripts/run_programmable_system_tb.sh
 
 descriptor-test:
 	bash scripts/run_descriptor_controller_tb.sh

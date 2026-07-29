@@ -135,6 +135,12 @@ set sources [list \
  rtl/runtime/cnn_model_metadata_store.sv \
  rtl/runtime/cnn_runtime_parameter_banks.sv \
  rtl/runtime/cnn_programmable_job_engine.sv \
+ rtl/runtime/cnn_tiled_layer_runtime.sv \
+ rtl/runtime/cnn_tiled_multi_layer_controller.sv \
+ rtl/runtime/cnn_programmable_runtime_top.sv \
+ rtl/tensor/spatial_tile_planner.sv \
+ rtl/tensor/halo_tile_load_controller.sv \
+ rtl/stream/tile_output_serializer.sv \
  rtl/scheduler/denoise_layer_descriptor_rom.sv \
  rtl/scheduler/performance_counters.sv \
  rtl/compute/reduction_tree.sv \
@@ -151,6 +157,8 @@ set sources [list \
  rtl/zynq/cnn_axi_lite_slave.sv \
  rtl/zynq/cnn_image2image_axi_stream_top.sv \
  rtl/zynq/cnn_image2image_system_top.sv \
+ rtl/zynq/cnn_programmable_axi_lite_slave.sv \
+ rtl/zynq/cnn_programmable_system_top.sv \
 ]
 
 foreach source $sources {

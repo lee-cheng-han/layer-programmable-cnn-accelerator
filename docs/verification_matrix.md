@@ -53,6 +53,7 @@
 | DDR-backed spatial tiling | High pre-integration | directed plus randomized geometry, real halo scratchpad loader, multi-tile 1x1 and 3x3 stride-2 golden output, active DDR metadata, and AXI backpressure |
 | multi-layer tiled execution | High pre-integration | two-layer packed tile flow through reusable parameters, DDR tensor handoff validation, progress, and negative chain rejection |
 | integrated programmable runtime | High pre-board | atomic model activation, descriptor-derived parameter CRC validation, packed tile ingress, real compute, and packed output in one RTL top |
+| programmable AXI-Lite system | High pre-board | AXI-Lite metadata/lifecycle/launch and progress readback wrapped around CRC-checked packed parameter/tile execution |
 | Zynq block design integration | High fixed baseline; programmable replacement pending | fixed-path bitstream and XSA generated at 125 MHz |
 | bare-metal DMA integration | High fixed baseline; programmable tile software pending | fixed-path Vitis app and BOOT.BIN build from XSA |
 | real hardware behavior | Pending | board not yet available |
@@ -69,6 +70,7 @@ make packed-dma-runtime-test
 make packed-dma-writer-test
 make tile-test
 make programmable-runtime-test
+make programmable-system-test
 make golden-test
 make unit
 make regression

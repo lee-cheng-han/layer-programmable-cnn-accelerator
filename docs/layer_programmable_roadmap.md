@@ -22,7 +22,7 @@ atomically activated, and reused across multiple images.
 | 7 | Introduce packed, versioned DMA protocol | Complete |
 | 8 | Implement DDR-backed spatial tiling and halo handling | RTL complete through integrated software-managed tile interface |
 | 9 | Complete residual and quantization behavior in runtime RTL | Planned |
-| 10 | Build runtime software and connect interrupts | Planned |
+| 10 | Build runtime software and connect interrupts | AXI-Lite/IRQ RTL complete; runtime software pending |
 | 11 | Add autonomous DDR fetching | Planned |
 | 12 | Expand protocol, randomized, golden, and negative verification | Planned |
 | 13 | Optimize performance and validate physical hardware | Planned |
@@ -93,7 +93,7 @@ documented interface or an isolated module.
 
 | Priority | Improvement | Current state | Completion gate |
 |---:|---|---|---|
-| 1 | Converge on one production architecture | In progress | Programmable runtime replaces the fixed seven-packet path in the Zybo block design; legacy execution RTL and software are retired after regression parity |
+| 1 | Converge on one production architecture | In progress; programmable AXI-Lite system top complete | Programmable runtime replaces the fixed seven-packet path in the Zybo block design; legacy execution RTL and software are retired after regression parity |
 | 2 | Complete per-channel quantization | Partial | Active quantization descriptors drive per-output-channel multiplier/shift, round-half-to-even, saturation, and zero-point checks through the integrated tiled runtime |
 | 3 | Implement DDR tile scheduling | RTL interface implemented; software pending | Bare-metal software gathers clipped NHWC source rectangles, submits DMA packets, scatters outputs, manages intermediate tensors and caches, and times out safely |
 | 4 | Strengthen integrated verification | Partial | Deterministic randomized 1-8-layer package-to-output tests cover mixed kernels, strides, padding, tails, backpressure, partial beats, CRC faults, malformed packets, and model replacement |
@@ -124,7 +124,9 @@ documented interface or an isolated module.
 
 1. **Programmable control and board integration:** bridge the integrated
    runtime into AXI-Lite, replace the fixed stream core, run synthesis and
-   implementation, and retain timing margin at 125 MHz.
+   implementation, and retain timing margin at 125 MHz. The AXI-Lite bridge
+   and `TKEEP`-aware block-design wrapper are complete; block-design selection
+   and implementation remain.
 2. **DDR-backed runtime software:** load active packages and parameters, gather
    halo-aware tiles, operate AXI DMA, scatter outputs, maintain caches, and
    recover from timeouts.
