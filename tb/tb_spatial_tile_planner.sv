@@ -263,11 +263,12 @@ module tb_spatial_tile_planner;
         random_tile_height
       );
       pulse_start();
+      wait (tile_valid || done);
 
       expected_tile_x = 0;
       expected_tile_y = 0;
       expected_tile_count = 0;
-      while (tile_valid) begin
+      while (!done) begin
         int expected_tile_width;
         int expected_tile_height;
         int expected_origin_x;
@@ -280,6 +281,9 @@ module tb_spatial_tile_planner;
         int expected_source_y_end;
         int expected_source_width;
         int expected_source_height;
+
+        wait (tile_valid || done);
+        if (done) break;
 
         expected_tile_width =
           ((expected_tile_x + random_tile_width) > random_output_width) ?
@@ -326,8 +330,20 @@ module tb_spatial_tile_planner;
             (output_payload_bytes !=
              (expected_tile_width * expected_tile_height *
               int'(output_channels)))) begin
-          $fatal(1, "random tile geometry mismatch test=%0d tile=%0d",
-                 test_index, expected_tile_count);
+          $fatal(
+            1,
+            {"random tile geometry mismatch test=%0d tile=%0d ",
+             "got=(%0d,%0d %0dx%0d origin=%0d,%0d local=%0dx%0d) ",
+             "expected=(%0d,%0d %0dx%0d origin=%0d,%0d local=%0dx%0d)"},
+            test_index, expected_tile_count,
+            tile_x, tile_y, tile_width, tile_height,
+            input_origin_x, input_origin_y,
+            local_input_width, local_input_height,
+            expected_tile_x, expected_tile_y,
+            expected_tile_width, expected_tile_height,
+            expected_origin_x, expected_origin_y,
+            expected_local_width, expected_local_height
+          );
         end
 
         expected_tile_count++;

@@ -5,7 +5,7 @@ VITIS_DATA_DIR ?= $(CURDIR)/build/vitis_data
 
 .PHONY: xsim regression xsim-regression lint clean flow-report report-flow check-warnings docs-check preboard-proof
 .PHONY: unit tile-test programmable-runtime-test programmable-system-test descriptor-test parameter-bank-test programmable-engine-test packed-dma-test packed-dma-runtime-test packed-dma-writer-test model-test model-package-example golden-test synth-sweep synth-report
-.PHONY: top-impl top-report baremetal-headers vitis-app
+.PHONY: top-impl top-report programmable-top-synth programmable-top-impl programmable-top-report baremetal-headers vitis-app
 .PHONY: zybo-z7-project zybo-z7-bitstream zybo-z7-xsa full-zybo-z7-flow
 .PHONY: boot-image full-preboard-proof program-zybo-z7
 
@@ -88,6 +88,27 @@ top-impl:
 
 top-report:
 	python3 scripts/report_top_impl.py --build-dir build/top_impl --markdown docs/top_implementation.md
+
+programmable-top-impl:
+	TOP_NAME=cnn_programmable_system_top OUT_DIR=build/programmable_top_impl \
+		$(HOME)/Xilinx/2025.2/Vivado/bin/vivado -mode batch -source scripts/impl_top_ooc.tcl
+	python3 scripts/report_top_impl.py --build-dir build/programmable_top_impl \
+		--markdown docs/programmable_top_implementation.md
+
+programmable-top-synth:
+	TOP_NAME=cnn_programmable_system_top SYNTH_ONLY=1 \
+		OUT_DIR=build/programmable_top_synth_candidate \
+		$(HOME)/Xilinx/2025.2/Vivado/bin/vivado -mode batch -source scripts/impl_top_ooc.tcl
+
+programmable-top-report:
+	python3 scripts/report_top_impl.py --build-dir build/programmable_top_impl \
+		--markdown docs/programmable_top_implementation.md
+
+programmable-top-physical-baseline:
+	$(HOME)/Xilinx/2025.2/Vivado/bin/vivado -mode batch \
+		-source scripts/implement_checkpoint.tcl \
+		-tclargs build/programmable_top_impl/top_synth.dcp \
+		build/programmable_top_physical_baseline
 
 zybo-z7-project:
 	$(HOME)/Xilinx/2025.2/Vivado/bin/vivado -mode batch -source scripts/zynq/create_zybo_z7_20_project.tcl

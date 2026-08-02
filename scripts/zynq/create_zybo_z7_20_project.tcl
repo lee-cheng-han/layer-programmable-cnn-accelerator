@@ -107,6 +107,8 @@ set_property -dict [list \
  CONFIG.PCW_USE_S_AXI_HP0 {1} \
  CONFIG.PCW_EN_CLK0_PORT {1} \
  CONFIG.PCW_FPGA0_PERIPHERAL_FREQMHZ {125.0} \
+ CONFIG.PCW_USE_FABRIC_INTERRUPT {1} \
+ CONFIG.PCW_IRQ_F2P_INTR {1} \
 ] [get_bd_cells ps7]
 
 create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset rst_ps7_0
@@ -134,7 +136,12 @@ set_property -dict [list \
  CONFIG.c_sg_include_stscntrl_strm {0} \
 ] [get_bd_cells axi_dma_0]
 
-create_bd_cell -type module -reference cnn_image2image_system_bd_wrapper cnn_0
+create_bd_cell -type module -reference cnn_programmable_system_bd_wrapper cnn_0
+
+create_bd_cell -type inline_hdl -vlnv xilinx.com:inline_hdl:ilconcat irq_concat
+set_property -dict [list \
+ CONFIG.NUM_PORTS {3} \
+] [get_bd_cells irq_concat]
 
 connect_bd_net [get_bd_pins ps7/FCLK_CLK0] [get_bd_pins rst_ps7_0/slowest_sync_clk]
 connect_bd_net [get_bd_pins ps7/FCLK_CLK0] [get_bd_pins ps7/M_AXI_GP0_ACLK]
@@ -170,6 +177,11 @@ connect_bd_net [get_bd_pins rst_ps7_0/peripheral_aresetn] [get_bd_pins axi_mem_i
 connect_bd_net [get_bd_pins rst_ps7_0/peripheral_aresetn] [get_bd_pins axi_dma_0/axi_resetn]
 connect_bd_net [get_bd_pins rst_ps7_0/peripheral_aresetn] [get_bd_pins cnn_0/s_axi_aresetn]
 
+connect_bd_net [get_bd_pins cnn_0/irq] [get_bd_pins irq_concat/In0]
+connect_bd_net [get_bd_pins axi_dma_0/mm2s_introut] [get_bd_pins irq_concat/In1]
+connect_bd_net [get_bd_pins axi_dma_0/s2mm_introut] [get_bd_pins irq_concat/In2]
+connect_bd_net [get_bd_pins irq_concat/dout] [get_bd_pins ps7/IRQ_F2P]
+
 connect_bd_intf_net [get_bd_intf_pins ps7/M_AXI_GP0] [get_bd_intf_pins axi_lite_interconnect/S00_AXI]
 connect_bd_intf_net [get_bd_intf_pins axi_lite_interconnect/M00_AXI] [get_bd_intf_pins cnn_0/S_AXI]
 connect_bd_intf_net [get_bd_intf_pins axi_lite_interconnect/M01_AXI] [get_bd_intf_pins axi_dma_0/S_AXI_LITE]
@@ -180,6 +192,17 @@ connect_bd_intf_net [get_bd_intf_pins axi_mem_interconnect/M00_AXI] [get_bd_intf
 
 connect_bd_intf_net [get_bd_intf_pins axi_dma_0/M_AXIS_MM2S] [get_bd_intf_pins cnn_0/S_AXIS]
 connect_bd_intf_net [get_bd_intf_pins cnn_0/M_AXIS] [get_bd_intf_pins axi_dma_0/S_AXIS_S2MM]
+
+foreach required_pin {
+ cnn_0/s_axis_tkeep
+ cnn_0/m_axis_tkeep
+ cnn_0/irq
+} {
+ if {[llength [get_bd_pins -quiet $required_pin]] != 1} {
+  puts "ERROR: Programmable CNN wrapper is missing required pin $required_pin"
+  exit 1
+ }
+}
 
 set cnn_slave_seg [get_bd_addr_segs -quiet /cnn_0/s_axi/reg0]
 if {[llength $cnn_slave_seg] < 1} {
@@ -220,11 +243,15 @@ set_property top ${bd_name}_wrapper [current_fileset]
 update_compile_order -fileset sources_1
 
 puts ""
-puts "ZYBO Z7-20 IMAGE-TO-IMAGE BLOCK DESIGN CREATED"
+puts "ZYBO Z7-20 LAYER-PROGRAMMABLE BLOCK DESIGN CREATED"
 puts "Project:"
 puts " $proj_dir/$proj_name.xpr"
 puts "CNN base address:"
 puts " 0x43C00000"
 puts "AXI DMA base address:"
 puts " 0x40400000"
+puts "Fabric interrupt mapping:"
+puts " IRQ_F2P\[0\] CNN runtime"
+puts " IRQ_F2P\[1\] DMA MM2S"
+puts " IRQ_F2P\[2\] DMA S2MM"
 puts ""

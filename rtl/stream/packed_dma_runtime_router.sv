@@ -105,25 +105,47 @@ module packed_dma_runtime_router (
   logic [2:0] weight_buffer_bytes;
   logic weight_byte_transfer;
   logic weight_buffer_complete;
+  logic bias_buffer_valid;
+  logic signed [31:0] bias_buffer_data;
+  logic bias_buffer_last;
+  logic bias_buffer_transfer;
+  logic activation_buffer_valid;
+  logic [31:0] activation_buffer_data;
+  logic [3:0] activation_buffer_keep;
+  logic activation_buffer_last;
+  logic activation_buffer_transfer;
   logic payload_transfer;
   logic semantic_error;
   logic [7:0] semantic_error_code;
+  logic parameter_config_valid_q;
+  logic [2:0] parameter_layer_id_q;
+  logic [1:0] parameter_kernel_size_q;
+  logic [7:0] parameter_cin_q;
+  logic [7:0] parameter_cout_q;
+  logic parameter_bias_enable_q;
+  logic parameter_quant_enable_q;
+  logic [4:0] parameter_quant_shift_q;
+  logic [15:0] parameter_weight_bytes_q;
+  logic [15:0] parameter_bias_bytes_q;
+  logic [31:0] parameter_crc32_q;
 
-  assign parameter_load_layer_id = parameter_config_layer_id;
-  assign parameter_load_kernel_size = parameter_config_kernel_size;
-  assign parameter_load_cin = parameter_config_cin;
-  assign parameter_load_cout = parameter_config_cout;
-  assign parameter_load_bias_enable = parameter_config_bias_enable;
-  assign parameter_load_quant_enable = parameter_config_quant_enable;
-  assign parameter_load_quant_shift = parameter_config_quant_shift;
-  assign parameter_load_weight_bytes = parameter_config_weight_bytes;
-  assign parameter_load_bias_bytes = parameter_config_bias_bytes;
-  assign parameter_load_expected_crc32 = parameter_config_crc32;
+  assign parameter_load_layer_id = parameter_layer_id_q;
+  assign parameter_load_kernel_size = parameter_kernel_size_q;
+  assign parameter_load_cin = parameter_cin_q;
+  assign parameter_load_cout = parameter_cout_q;
+  assign parameter_load_bias_enable = parameter_bias_enable_q;
+  assign parameter_load_quant_enable = parameter_quant_enable_q;
+  assign parameter_load_quant_shift = parameter_quant_shift_q;
+  assign parameter_load_weight_bytes = parameter_weight_bytes_q;
+  assign parameter_load_bias_bytes = parameter_bias_bytes_q;
+  assign parameter_load_expected_crc32 = parameter_crc32_q;
 
-  assign activation_data = payload_data;
-  assign activation_keep = payload_keep;
-  assign activation_last = payload_last;
-  assign activation_valid = (state == S_ACTIVATION) && payload_valid;
+  assign activation_data = activation_buffer_data;
+  assign activation_keep = activation_buffer_keep;
+  assign activation_last = activation_buffer_last;
+  assign activation_valid = activation_buffer_valid;
+  assign activation_buffer_transfer =
+    activation_valid && activation_ready;
 
   assign weight_buffer_bytes = bytes_for_keep(weight_buffer_keep);
   assign parameter_weight_valid = (state == S_WEIGHTS) && weight_buffer_valid;
@@ -133,14 +155,16 @@ module packed_dma_runtime_router (
   assign weight_buffer_complete =
     weight_lane + 2'd1 >= weight_buffer_bytes;
 
-  assign parameter_bias_valid = (state == S_BIASES) && payload_valid;
-  assign parameter_bias_data = payload_data;
+  assign parameter_bias_valid = bias_buffer_valid;
+  assign parameter_bias_data = bias_buffer_data;
+  assign bias_buffer_transfer =
+    parameter_bias_valid && parameter_bias_ready;
 
   always_comb begin
     unique case (state)
       S_WEIGHTS: payload_ready = !weight_buffer_valid;
-      S_BIASES: payload_ready = parameter_bias_ready;
-      S_ACTIVATION: payload_ready = activation_ready;
+      S_BIASES: payload_ready = !bias_buffer_valid || parameter_bias_ready;
+      S_ACTIVATION: payload_ready = !activation_buffer_valid || activation_ready;
       S_DROP: payload_ready = 1'b1;
       default: payload_ready = 1'b0;
     endcase
@@ -153,7 +177,7 @@ module packed_dma_runtime_router (
         if (packet_type == DMA_PACKET_INPUT_TILE) begin
           packet_ready = activation_packet_ready;
         end else if (packet_type == DMA_PACKET_LAYER_WEIGHTS) begin
-          packet_ready = !parameter_config_valid || parameter_load_ready;
+          packet_ready = !parameter_config_valid_q || parameter_load_ready;
         end else begin
           packet_ready = 1'b1;
         end
@@ -168,15 +192,15 @@ module packed_dma_runtime_router (
     semantic_error_code = ROUTER_ERROR_NONE;
     if (state == S_IDLE) begin
       if (packet_type == DMA_PACKET_LAYER_WEIGHTS) begin
-        if (!parameter_config_valid) begin
+        if (!parameter_config_valid_q) begin
           semantic_error = 1'b1;
           semantic_error_code = ROUTER_ERROR_PARAMETER_CONFIG;
         end else if (packet_layer_id[15:3] != 0 ||
-                     packet_layer_id[2:0] != parameter_config_layer_id) begin
+                     packet_layer_id[2:0] != parameter_layer_id_q) begin
           semantic_error = 1'b1;
           semantic_error_code = ROUTER_ERROR_LAYER_ID;
         end else if (packet_payload_length !=
-                     32'(parameter_config_weight_bytes)) begin
+                     32'(parameter_weight_bytes_q)) begin
           semantic_error = 1'b1;
           semantic_error_code = ROUTER_ERROR_PAYLOAD_LENGTH;
         end
@@ -184,18 +208,18 @@ module packed_dma_runtime_router (
         semantic_error = 1'b1;
         semantic_error_code = ROUTER_ERROR_PACKET_ORDER;
       end
-    end else if (state == S_WAIT_BIAS) begin
-      if (packet_type != DMA_PACKET_LAYER_BIASES) begin
-        semantic_error = 1'b1;
-        semantic_error_code = ROUTER_ERROR_PACKET_ORDER;
-      end else if (packet_layer_id[15:3] != 0 ||
-                   packet_layer_id[2:0] != parameter_config_layer_id) begin
-        semantic_error = 1'b1;
-        semantic_error_code = ROUTER_ERROR_LAYER_ID;
-      end else if (packet_payload_length !=
-                   32'(parameter_config_bias_bytes)) begin
-        semantic_error = 1'b1;
-        semantic_error_code = ROUTER_ERROR_PAYLOAD_LENGTH;
+      end else if (state == S_WAIT_BIAS) begin
+        if (packet_type != DMA_PACKET_LAYER_BIASES) begin
+          semantic_error = 1'b1;
+          semantic_error_code = ROUTER_ERROR_PACKET_ORDER;
+        end else if (packet_layer_id[15:3] != 0 ||
+                     packet_layer_id[2:0] != parameter_layer_id_q) begin
+          semantic_error = 1'b1;
+          semantic_error_code = ROUTER_ERROR_LAYER_ID;
+        end else if (packet_payload_length !=
+                     32'(parameter_bias_bytes_q)) begin
+          semantic_error = 1'b1;
+          semantic_error_code = ROUTER_ERROR_PAYLOAD_LENGTH;
       end
     end
   end
@@ -208,8 +232,26 @@ module packed_dma_runtime_router (
       weight_buffer_keep <= '0;
       weight_buffer_last <= 1'b0;
       weight_lane <= '0;
+      bias_buffer_valid <= 1'b0;
+      bias_buffer_data <= '0;
+      bias_buffer_last <= 1'b0;
+      activation_buffer_valid <= 1'b0;
+      activation_buffer_data <= '0;
+      activation_buffer_keep <= '0;
+      activation_buffer_last <= 1'b0;
       parameter_load_start <= 1'b0;
       parameter_load_abort <= 1'b0;
+      parameter_config_valid_q <= 1'b0;
+      parameter_layer_id_q <= '0;
+      parameter_kernel_size_q <= '0;
+      parameter_cin_q <= '0;
+      parameter_cout_q <= '0;
+      parameter_bias_enable_q <= 1'b0;
+      parameter_quant_enable_q <= 1'b0;
+      parameter_quant_shift_q <= '0;
+      parameter_weight_bytes_q <= '0;
+      parameter_bias_bytes_q <= '0;
+      parameter_crc32_q <= '0;
       activation_packet_start <= 1'b0;
       activation_job_id <= '0;
       activation_tensor_id <= '0;
@@ -230,8 +272,11 @@ module packed_dma_runtime_router (
 
       if (clear) begin
         state <= S_IDLE;
+        parameter_config_valid_q <= 1'b0;
         weight_buffer_valid <= 1'b0;
         weight_lane <= '0;
+        bias_buffer_valid <= 1'b0;
+        activation_buffer_valid <= 1'b0;
         error <= 1'b0;
         error_code <= ROUTER_ERROR_NONE;
       end else if (packet_error_valid) begin
@@ -242,7 +287,23 @@ module packed_dma_runtime_router (
         state <= S_IDLE;
         weight_buffer_valid <= 1'b0;
         weight_lane <= '0;
+        bias_buffer_valid <= 1'b0;
+        activation_buffer_valid <= 1'b0;
       end else begin
+        if ((state == S_IDLE) && !packet_start) begin
+          parameter_config_valid_q <= parameter_config_valid;
+          parameter_layer_id_q <= parameter_config_layer_id;
+          parameter_kernel_size_q <= parameter_config_kernel_size;
+          parameter_cin_q <= parameter_config_cin;
+          parameter_cout_q <= parameter_config_cout;
+          parameter_bias_enable_q <= parameter_config_bias_enable;
+          parameter_quant_enable_q <= parameter_config_quant_enable;
+          parameter_quant_shift_q <= parameter_config_quant_shift;
+          parameter_weight_bytes_q <= parameter_config_weight_bytes;
+          parameter_bias_bytes_q <= parameter_config_bias_bytes;
+          parameter_crc32_q <= parameter_config_crc32;
+        end
+
         if (packet_start) begin
           if (semantic_error) begin
             error <= 1'b1;
@@ -286,19 +347,38 @@ module packed_dma_runtime_router (
             weight_buffer_valid <= 1'b0;
             weight_lane <= '0;
             if (weight_buffer_last) begin
-              state <= parameter_config_bias_enable ? S_WAIT_BIAS : S_IDLE;
+              state <= parameter_bias_enable_q ? S_WAIT_BIAS : S_IDLE;
             end
           end else begin
             weight_lane <= weight_lane + 2'd1;
           end
         end
 
-        if ((state == S_BIASES) && payload_transfer && payload_last) begin
-          state <= S_IDLE;
+        if (bias_buffer_transfer) begin
+          bias_buffer_valid <= 1'b0;
+          if (bias_buffer_last) begin
+            state <= S_IDLE;
+          end
         end
 
-        if ((state == S_ACTIVATION) && payload_transfer && payload_last) begin
-          state <= S_IDLE;
+        if ((state == S_BIASES) && payload_transfer) begin
+          bias_buffer_valid <= 1'b1;
+          bias_buffer_data <= payload_data;
+          bias_buffer_last <= payload_last;
+        end
+
+        if (activation_buffer_transfer) begin
+          activation_buffer_valid <= 1'b0;
+          if (activation_buffer_last) begin
+            state <= S_IDLE;
+          end
+        end
+
+        if ((state == S_ACTIVATION) && payload_transfer) begin
+          activation_buffer_valid <= 1'b1;
+          activation_buffer_data <= payload_data;
+          activation_buffer_keep <= payload_keep;
+          activation_buffer_last <= payload_last;
         end
 
         if ((state == S_DROP) && payload_transfer && payload_last) begin

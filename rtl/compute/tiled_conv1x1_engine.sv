@@ -102,6 +102,7 @@ module tiled_conv1x1_engine #(
   logic signed [ACC_W-1:0] quant_acc_vec [PK];
   logic signed [OUT_W-1:0] post_out_vec [PK];
   logic signed [OUT_W-1:0] post_out_vec_q [PK];
+  logic [PK-1:0] post_lane_mask_q;
 
   tail_mask_generator #(
     .LANES(PC),
@@ -231,7 +232,7 @@ module tiled_conv1x1_engine #(
     .acc_in(relu_acc_vec_q),
     .quant_enable(quant_enable),
     .quant_shift(quant_shift),
-    .lane_mask(cout_lane_mask),
+    .lane_mask(post_lane_mask_q),
     .acc_out(quant_acc_vec)
   );
 
@@ -241,7 +242,7 @@ module tiled_conv1x1_engine #(
     .OUT_W(OUT_W)
   ) u_parallel_saturate (
     .acc_in(quant_acc_vec),
-    .lane_mask(cout_lane_mask),
+    .lane_mask(post_lane_mask_q),
     .out_vec(post_out_vec)
   );
 
@@ -264,6 +265,7 @@ module tiled_conv1x1_engine #(
       scratch_weight_read_kernel_idx_q <= '0;
       scratch_weight_out_lane_mask_q <= '0;
       scratch_weight_in_lane_mask_q <= '0;
+      post_lane_mask_q <= '0;
 
       for (int co = 0; co < MAX_COUT; co++) begin
         output_data[co] <= '0;
@@ -349,6 +351,7 @@ module tiled_conv1x1_engine #(
         end
 
         S_POST_RELU: begin
+          post_lane_mask_q <= cout_lane_mask;
           for (int pk = 0; pk < PK; pk++) begin
             relu_acc_vec_q[pk] <= relu_acc_vec[pk];
           end
@@ -364,7 +367,7 @@ module tiled_conv1x1_engine #(
 
         S_WRITE_TILE: begin
           for (int pk = 0; pk < PK; pk++) begin
-            if (cout_lane_mask[pk]) begin
+            if (post_lane_mask_q[pk]) begin
               output_data[int'(k_base) + pk] <= post_out_vec_q[pk];
             end
           end

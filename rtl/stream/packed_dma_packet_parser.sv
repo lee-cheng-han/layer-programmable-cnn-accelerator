@@ -61,6 +61,11 @@ module packed_dma_packet_parser #(
   logic [7:0] header_error_code;
   logic payload_error;
   logic [7:0] payload_error_code;
+  logic payload_buffer_valid;
+  logic [31:0] payload_buffer_data;
+  logic [3:0] payload_buffer_keep;
+  logic payload_buffer_last;
+  logic payload_buffer_transfer;
 
   assign payload_bytes_remaining = payload_length - payload_bytes_received;
   assign expected_beat_bytes =
@@ -133,7 +138,7 @@ module packed_dma_packet_parser #(
         s_axis_tready = (header_word_index == 3'd7) ? packet_ready : 1'b1;
       end
       S_PAYLOAD: begin
-        s_axis_tready = (s_axis_tvalid && payload_error) ? 1'b1 : payload_ready;
+        s_axis_tready = !payload_buffer_valid || payload_ready;
       end
       S_DISCARD: s_axis_tready = 1'b1;
       default: s_axis_tready = 1'b0;
@@ -141,11 +146,11 @@ module packed_dma_packet_parser #(
   end
 
   assign input_transfer = s_axis_tvalid && s_axis_tready;
-  assign payload_valid =
-    (state == S_PAYLOAD) && s_axis_tvalid && !payload_error;
-  assign payload_data = s_axis_tdata;
-  assign payload_keep = s_axis_tkeep;
-  assign payload_last = s_axis_tlast;
+  assign payload_valid = payload_buffer_valid;
+  assign payload_data = payload_buffer_data;
+  assign payload_keep = payload_buffer_keep;
+  assign payload_last = payload_buffer_last;
+  assign payload_buffer_transfer = payload_valid && payload_ready;
   assign packet_busy = state != S_HEADER || header_word_index != 0;
   assign recovering = state == S_DISCARD;
 
@@ -165,6 +170,10 @@ module packed_dma_packet_parser #(
       channel_offset <= '0;
       channel_count <= '0;
       payload_length <= '0;
+      payload_buffer_valid <= 1'b0;
+      payload_buffer_data <= '0;
+      payload_buffer_keep <= '0;
+      payload_buffer_last <= 1'b0;
       packet_start <= 1'b0;
       packet_done <= 1'b0;
       error_valid <= 1'b0;
@@ -179,9 +188,14 @@ module packed_dma_packet_parser #(
         state <= S_HEADER;
         header_word_index <= '0;
         payload_bytes_received <= '0;
+        payload_buffer_valid <= 1'b0;
         error_code <= DMA_PACKET_ERROR_NONE;
         error_count <= '0;
       end else begin
+        if (payload_buffer_transfer) begin
+          payload_buffer_valid <= 1'b0;
+        end
+
         unique case (state)
           S_HEADER: begin
             if (input_transfer) begin
@@ -236,13 +250,19 @@ module packed_dma_packet_parser #(
                 error_count <= error_count + 32'd1;
                 payload_bytes_received <= '0;
                 state <= s_axis_tlast ? S_HEADER : S_DISCARD;
-              end else if (expected_last) begin
-                payload_bytes_received <= '0;
-                packet_done <= 1'b1;
-                state <= S_HEADER;
               end else begin
-                payload_bytes_received <=
-                  payload_bytes_received + 32'(bytes_for_keep(s_axis_tkeep));
+                payload_buffer_valid <= 1'b1;
+                payload_buffer_data <= s_axis_tdata;
+                payload_buffer_keep <= s_axis_tkeep;
+                payload_buffer_last <= s_axis_tlast;
+                if (expected_last) begin
+                  payload_bytes_received <= '0;
+                  packet_done <= 1'b1;
+                  state <= S_HEADER;
+                end else begin
+                  payload_bytes_received <=
+                    payload_bytes_received + 32'(bytes_for_keep(s_axis_tkeep));
+                end
               end
             end
           end

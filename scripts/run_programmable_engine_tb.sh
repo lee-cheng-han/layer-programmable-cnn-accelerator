@@ -34,6 +34,7 @@ verilator --binary --timing \
  rtl/scheduler/single_layer_scheduler.sv \
  rtl/scheduler/descriptor_driven_job_controller.sv \
  rtl/tensor/weight_scratchpad.sv \
+ rtl/tensor/banked_weight_scratchpad.sv \
  rtl/tensor/ping_pong_weight_scratchpad.sv \
  rtl/runtime/cnn_runtime_parameter_banks.sv \
  rtl/runtime/cnn_programmable_job_engine.sv \

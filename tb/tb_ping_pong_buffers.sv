@@ -244,6 +244,7 @@ module tb_ping_pong_buffers;
 
  task automatic expect_weight(input string name, input int expected);
  begin
+ repeat (2) @(posedge clk);
  #1;
  if (weight_mat[0][0] !== expected[DATA_W-1:0]) begin
  $display("[FAIL] %s: weight expected=%0d got=%0d",

@@ -136,8 +136,17 @@ module cnn_tiled_multi_layer_controller #(
   localparam logic [7:0] MULTI_ERROR_RUNTIME = 8'd8;
   localparam logic [7:0] MULTI_ERROR_BUSY = 8'd9;
 
-  typedef enum logic [2:0] {
+  typedef enum logic [3:0] {
     S_IDLE,
+    S_FETCH_DESCRIPTOR,
+    S_WAIT_DESCRIPTOR,
+    S_CAPTURE_DESCRIPTOR,
+    S_LATCH_DESCRIPTOR,
+    S_CALCULATE_DESCRIPTOR,
+    S_MULTIPLY_DESCRIPTOR_SPANS,
+    S_COMBINE_DESCRIPTOR_SPANS,
+    S_SUM_ALLOCATION,
+    S_FINALIZE_ALLOCATION,
     S_CHECK_DESCRIPTOR,
     S_START_LAYER,
     S_WAIT_LAYER,
@@ -147,6 +156,48 @@ module cnn_tiled_multi_layer_controller #(
   } state_t;
 
   state_t state;
+  typedef struct packed {
+    logic valid;
+    logic [15:0] layer_id;
+    logic [15:0] opcode;
+    logic last_layer;
+    logic [15:0] input_channels;
+    logic [15:0] output_channels;
+    logic [7:0] kernel_height;
+    logic [7:0] kernel_width;
+    logic [7:0] stride_y;
+    logic [7:0] stride_x;
+    logic [7:0] padding_top;
+    logic [7:0] padding_bottom;
+    logic [7:0] padding_left;
+    logic [7:0] padding_right;
+    logic [7:0] dilation_y;
+    logic [7:0] dilation_x;
+    logic [7:0] activation;
+    logic [7:0] residual_mode;
+    logic bias_enable;
+    logic [15:0] input_tensor_id;
+    logic [15:0] output_tensor_id;
+    logic [63:0] input_ddr_offset;
+    logic [31:0] input_allocation_size;
+    logic [31:0] input_row_stride;
+    logic [31:0] input_pixel_stride;
+    logic [31:0] input_channel_stride;
+    logic [63:0] output_ddr_offset;
+    logic [31:0] output_allocation_size;
+    logic [31:0] output_row_stride;
+    logic [31:0] output_pixel_stride;
+    logic [31:0] output_channel_stride;
+    logic [15:0] input_width;
+    logic [15:0] input_height;
+    logic [15:0] output_width;
+    logic [15:0] output_height;
+    logic [15:0] tile_width_hint;
+    logic [15:0] tile_height_hint;
+  } descriptor_snapshot_t;
+
+  descriptor_snapshot_t descriptor_snapshot;
+  logic capture_active_q;
   logic [2:0] layer_index;
   logic [3:0] layer_count_q;
   logic runtime_start;
@@ -156,10 +207,71 @@ module cnn_tiled_multi_layer_controller #(
   logic descriptor_semantic_valid;
   logic [7:0] descriptor_error_code;
   logic descriptor_is_final;
-  logic [31:0] expected_output_width;
-  logic [31:0] expected_output_height;
-  logic [63:0] minimum_input_allocation;
-  logic [63:0] minimum_output_allocation;
+  logic captured_descriptor_valid;
+  logic [15:0] captured_layer_id;
+  logic [15:0] captured_opcode;
+  logic captured_last_layer;
+  logic [15:0] captured_input_channels;
+  logic [15:0] captured_output_channels;
+  logic [7:0] captured_kernel_height;
+  logic [7:0] captured_kernel_width;
+  logic [7:0] captured_stride_y;
+  logic [7:0] captured_stride_x;
+  logic [7:0] captured_padding_top;
+  logic [7:0] captured_padding_bottom;
+  logic [7:0] captured_padding_left;
+  logic [7:0] captured_padding_right;
+  logic [7:0] captured_dilation_y;
+  logic [7:0] captured_dilation_x;
+  logic [7:0] captured_activation;
+  logic [7:0] captured_residual_mode;
+  logic [31:0] expected_output_width_q;
+  logic [31:0] expected_output_height_q;
+  logic [31:0] output_width_numerator_q;
+  logic [31:0] output_height_numerator_q;
+  logic output_width_geometry_valid_q;
+  logic output_height_geometry_valid_q;
+  logic [63:0] minimum_input_allocation_q;
+  logic [63:0] minimum_output_allocation_q;
+  logic [63:0] minimum_input_row_stride_q;
+  logic [63:0] minimum_output_row_stride_q;
+  logic [63:0] input_row_span_q;
+  logic [63:0] input_pixel_span_q;
+  logic [63:0] input_channel_span_q;
+  logic [63:0] output_row_span_q;
+  logic [63:0] output_pixel_span_q;
+  logic [63:0] output_channel_span_q;
+  logic [31:0] minimum_input_row_stride_high_q;
+  logic [31:0] minimum_output_row_stride_high_q;
+  logic [31:0] input_row_span_high_q;
+  logic [31:0] input_pixel_span_high_q;
+  logic [31:0] input_channel_span_high_q;
+  logic [31:0] output_row_span_high_q;
+  logic [31:0] output_pixel_span_high_q;
+  logic [31:0] output_channel_span_high_q;
+  logic [63:0] input_allocation_partial_q;
+  logic [63:0] output_allocation_partial_q;
+  logic [15:0] input_width_extent_q;
+  logic [15:0] input_height_extent_q;
+  logic [15:0] input_channel_extent_q;
+  logic [15:0] output_width_extent_q;
+  logic [15:0] output_height_extent_q;
+  logic [15:0] output_channel_extent_q;
+
+  function automatic logic [31:0] multiply_16x16(
+    input logic [15:0] lhs,
+    input logic [15:0] rhs
+  );
+    multiply_16x16 = 32'(lhs) * 32'(rhs);
+  endfunction
+
+  function automatic logic [63:0] combine_stride_product(
+    input logic [31:0] low_product,
+    input logic [31:0] high_product
+  );
+    combine_stride_product =
+      64'({16'd0, low_product}) + 64'({high_product, 16'd0});
+  endfunction
 
   logic [15:0] previous_output_tensor_id;
   logic [15:0] previous_output_width;
@@ -192,108 +304,66 @@ module cnn_tiled_multi_layer_controller #(
     (4'(layer_index) + 4'd1) == layer_count_q;
 
   always_comb begin
-    expected_output_width = 32'd0;
-    expected_output_height = 32'd0;
-    if ((descriptor_stride_x != 0) &&
-        ((32'(descriptor_input_width) + 32'(descriptor_padding_left) +
-          32'(descriptor_padding_right)) >=
-         32'(descriptor_kernel_width))) begin
-      expected_output_width =
-        ((32'(descriptor_input_width) + 32'(descriptor_padding_left) +
-          32'(descriptor_padding_right) - 32'(descriptor_kernel_width)) /
-         32'(descriptor_stride_x)) + 32'd1;
-    end
-    if ((descriptor_stride_y != 0) &&
-        ((32'(descriptor_input_height) + 32'(descriptor_padding_top) +
-          32'(descriptor_padding_bottom)) >=
-         32'(descriptor_kernel_height))) begin
-      expected_output_height =
-        ((32'(descriptor_input_height) + 32'(descriptor_padding_top) +
-          32'(descriptor_padding_bottom) - 32'(descriptor_kernel_height)) /
-         32'(descriptor_stride_y)) + 32'd1;
-    end
-
-    minimum_input_allocation =
-      (64'(descriptor_input_height - 16'd1) *
-       64'(descriptor_input_row_stride)) +
-      (64'(descriptor_input_width - 16'd1) *
-       64'(descriptor_input_pixel_stride)) +
-      (64'(descriptor_input_channels - 16'd1) *
-       64'(descriptor_input_channel_stride)) + 64'd1;
-    minimum_output_allocation =
-      (64'(descriptor_output_height - 16'd1) *
-       64'(descriptor_output_row_stride)) +
-      (64'(descriptor_output_width - 16'd1) *
-       64'(descriptor_output_pixel_stride)) +
-      (64'(descriptor_output_channels - 16'd1) *
-       64'(descriptor_output_channel_stride)) + 64'd1;
-  end
-
-  always_comb begin
     descriptor_semantic_valid = 1'b0;
     descriptor_error_code = MULTI_ERROR_DESCRIPTOR;
 
-    if (!descriptor_valid ||
-        (descriptor_layer_id != 16'(layer_index)) ||
-        (descriptor_last_layer != descriptor_is_final)) begin
+    if (!captured_descriptor_valid ||
+        (captured_layer_id != 16'(layer_index)) ||
+        (captured_last_layer != descriptor_is_final)) begin
       descriptor_error_code = MULTI_ERROR_DESCRIPTOR;
-    end else if ((descriptor_opcode != OPCODE_CONV2D) ||
-                 !((descriptor_kernel_width == 1) ||
-                   (descriptor_kernel_width == 3)) ||
-                 (descriptor_kernel_height != descriptor_kernel_width) ||
-                 !((descriptor_stride_x == 1) ||
-                   (descriptor_stride_x == 2)) ||
-                 (descriptor_stride_y != descriptor_stride_x) ||
-                 (descriptor_padding_top > 1) ||
-                 (descriptor_padding_bottom > 1) ||
-                 (descriptor_padding_left > 1) ||
-                 (descriptor_padding_right > 1) ||
-                 (descriptor_dilation_x != 1) ||
-                 (descriptor_dilation_y != 1) ||
-                 (descriptor_activation > ACTIVATION_RELU) ||
-                 (descriptor_residual_mode != RESIDUAL_NONE)) begin
+    end else if ((captured_opcode != OPCODE_CONV2D) ||
+                 !((captured_kernel_width == 1) ||
+                   (captured_kernel_width == 3)) ||
+                 (captured_kernel_height != captured_kernel_width) ||
+                 !((captured_stride_x == 1) ||
+                   (captured_stride_x == 2)) ||
+                 (captured_stride_y != captured_stride_x) ||
+                 (captured_padding_top > 1) ||
+                 (captured_padding_bottom > 1) ||
+                 (captured_padding_left > 1) ||
+                 (captured_padding_right > 1) ||
+                 (captured_dilation_x != 1) ||
+                 (captured_dilation_y != 1) ||
+                 (captured_activation > ACTIVATION_RELU) ||
+                 (captured_residual_mode != RESIDUAL_NONE)) begin
       descriptor_error_code = MULTI_ERROR_UNSUPPORTED;
-    end else if ((descriptor_input_width == 0) ||
-                 (descriptor_input_height == 0) ||
-                 (descriptor_output_width == 0) ||
-                 (descriptor_output_height == 0) ||
-                 (descriptor_input_width > 16'(MAX_TENSOR_WIDTH)) ||
-                 (descriptor_input_height > 16'(MAX_TENSOR_HEIGHT)) ||
-                 (descriptor_output_width > 16'(MAX_TENSOR_WIDTH)) ||
-                 (descriptor_output_height > 16'(MAX_TENSOR_HEIGHT)) ||
-                 (descriptor_input_channels == 0) ||
-                 (descriptor_input_channels > 16'(MAX_CIN)) ||
-                 (descriptor_output_channels == 0) ||
-                 (descriptor_output_channels > 16'(MAX_COUT)) ||
-                 (expected_output_width != 32'(descriptor_output_width)) ||
-                 (expected_output_height != 32'(descriptor_output_height)) ||
-                 (descriptor_tile_width_hint > 16'(MAX_TILE_WIDTH)) ||
-                 (descriptor_tile_height_hint > 16'(MAX_TILE_HEIGHT))) begin
+    end else if ((active_input_width == 0) ||
+                 (active_input_height == 0) ||
+                 (active_output_width == 0) ||
+                 (active_output_height == 0) ||
+                 (active_input_width > 16'(MAX_TENSOR_WIDTH)) ||
+                 (active_input_height > 16'(MAX_TENSOR_HEIGHT)) ||
+                 (active_output_width > 16'(MAX_TENSOR_WIDTH)) ||
+                 (active_output_height > 16'(MAX_TENSOR_HEIGHT)) ||
+                 (captured_input_channels == 0) ||
+                 (captured_input_channels > 16'(MAX_CIN)) ||
+                 (captured_output_channels == 0) ||
+                 (captured_output_channels > 16'(MAX_COUT)) ||
+                 (expected_output_width_q != 32'(active_output_width)) ||
+                 (expected_output_height_q != 32'(active_output_height)) ||
+                 (active_tile_width_hint > 16'(MAX_TILE_WIDTH)) ||
+                 (active_tile_height_hint > 16'(MAX_TILE_HEIGHT))) begin
       descriptor_error_code = MULTI_ERROR_GEOMETRY;
     end else if ((layer_index != 0) &&
-                 ((descriptor_input_tensor_id != previous_output_tensor_id) ||
-                  (descriptor_input_width != previous_output_width) ||
-                  (descriptor_input_height != previous_output_height) ||
-                  (descriptor_input_channels != previous_output_channels) ||
-                  (descriptor_input_ddr_offset !=
+                 ((active_input_tensor_id != previous_output_tensor_id) ||
+                  (active_input_width != previous_output_width) ||
+                  (active_input_height != previous_output_height) ||
+                  (captured_input_channels != previous_output_channels) ||
+                  (active_input_ddr_offset !=
                    previous_output_ddr_offset))) begin
       descriptor_error_code = MULTI_ERROR_CHAIN;
-    end else if ((descriptor_input_channel_stride != 1) ||
-                 (descriptor_output_channel_stride != 1) ||
-                 (descriptor_input_pixel_stride <
-                  descriptor_input_channels) ||
-                 (descriptor_output_pixel_stride <
-                  descriptor_output_channels) ||
-                 (descriptor_input_row_stride <
-                  (32'(descriptor_input_width) *
-                   descriptor_input_pixel_stride)) ||
-                 (descriptor_output_row_stride <
-                  (32'(descriptor_output_width) *
-                   descriptor_output_pixel_stride)) ||
-                 (64'(descriptor_input_allocation_size) <
-                  minimum_input_allocation) ||
-                 (64'(descriptor_output_allocation_size) <
-                  minimum_output_allocation)) begin
+    end else if ((active_input_channel_stride != 1) ||
+                 (active_output_channel_stride != 1) ||
+                 (active_input_pixel_stride < captured_input_channels) ||
+                 (active_output_pixel_stride < captured_output_channels) ||
+                 (64'(active_input_row_stride) <
+                  minimum_input_row_stride_q) ||
+                 (64'(active_output_row_stride) <
+                  minimum_output_row_stride_q) ||
+                 (64'(active_input_allocation_size) <
+                  minimum_input_allocation_q) ||
+                 (64'(active_output_allocation_size) <
+                  minimum_output_allocation_q)) begin
       descriptor_error_code = MULTI_ERROR_DDR_LAYOUT;
     end else begin
       descriptor_semantic_valid = 1'b1;
@@ -382,14 +452,73 @@ module cnn_tiled_multi_layer_controller #(
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      state <= S_IDLE;
-      layer_index <= '0;
-      layer_count_q <= '0;
-      previous_output_tensor_id <= '0;
-      previous_output_width <= '0;
-      previous_output_height <= '0;
-      previous_output_channels <= '0;
-      previous_output_ddr_offset <= '0;
+      descriptor_snapshot <= '0;
+    end else begin
+      descriptor_snapshot.valid <= descriptor_valid;
+      descriptor_snapshot.layer_id <= descriptor_layer_id;
+      descriptor_snapshot.opcode <= descriptor_opcode;
+      descriptor_snapshot.last_layer <= descriptor_last_layer;
+      descriptor_snapshot.input_channels <= descriptor_input_channels;
+      descriptor_snapshot.output_channels <= descriptor_output_channels;
+      descriptor_snapshot.kernel_height <= descriptor_kernel_height;
+      descriptor_snapshot.kernel_width <= descriptor_kernel_width;
+      descriptor_snapshot.stride_y <= descriptor_stride_y;
+      descriptor_snapshot.stride_x <= descriptor_stride_x;
+      descriptor_snapshot.padding_top <= descriptor_padding_top;
+      descriptor_snapshot.padding_bottom <= descriptor_padding_bottom;
+      descriptor_snapshot.padding_left <= descriptor_padding_left;
+      descriptor_snapshot.padding_right <= descriptor_padding_right;
+      descriptor_snapshot.dilation_y <= descriptor_dilation_y;
+      descriptor_snapshot.dilation_x <= descriptor_dilation_x;
+      descriptor_snapshot.activation <= descriptor_activation;
+      descriptor_snapshot.residual_mode <= descriptor_residual_mode;
+      descriptor_snapshot.bias_enable <= descriptor_bias_enable;
+      descriptor_snapshot.input_tensor_id <= descriptor_input_tensor_id;
+      descriptor_snapshot.output_tensor_id <= descriptor_output_tensor_id;
+      descriptor_snapshot.input_ddr_offset <= descriptor_input_ddr_offset;
+      descriptor_snapshot.input_allocation_size <=
+        descriptor_input_allocation_size;
+      descriptor_snapshot.input_row_stride <= descriptor_input_row_stride;
+      descriptor_snapshot.input_pixel_stride <= descriptor_input_pixel_stride;
+      descriptor_snapshot.input_channel_stride <=
+        descriptor_input_channel_stride;
+      descriptor_snapshot.output_ddr_offset <= descriptor_output_ddr_offset;
+      descriptor_snapshot.output_allocation_size <=
+        descriptor_output_allocation_size;
+      descriptor_snapshot.output_row_stride <= descriptor_output_row_stride;
+      descriptor_snapshot.output_pixel_stride <=
+        descriptor_output_pixel_stride;
+      descriptor_snapshot.output_channel_stride <=
+        descriptor_output_channel_stride;
+      descriptor_snapshot.input_width <= descriptor_input_width;
+      descriptor_snapshot.input_height <= descriptor_input_height;
+      descriptor_snapshot.output_width <= descriptor_output_width;
+      descriptor_snapshot.output_height <= descriptor_output_height;
+      descriptor_snapshot.tile_width_hint <= descriptor_tile_width_hint;
+      descriptor_snapshot.tile_height_hint <= descriptor_tile_height_hint;
+    end
+  end
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      captured_descriptor_valid <= 1'b0;
+      captured_layer_id <= '0;
+      captured_opcode <= '0;
+      captured_last_layer <= 1'b0;
+      captured_input_channels <= '0;
+      captured_output_channels <= '0;
+      captured_kernel_height <= '0;
+      captured_kernel_width <= '0;
+      captured_stride_y <= '0;
+      captured_stride_x <= '0;
+      captured_padding_top <= '0;
+      captured_padding_bottom <= '0;
+      captured_padding_left <= '0;
+      captured_padding_right <= '0;
+      captured_dilation_y <= '0;
+      captured_dilation_x <= '0;
+      captured_activation <= '0;
+      captured_residual_mode <= '0;
       active_input_tensor_id <= '0;
       active_output_tensor_id <= '0;
       active_input_ddr_offset <= '0;
@@ -418,6 +547,102 @@ module cnn_tiled_multi_layer_controller #(
       active_relu_enable <= 1'b0;
       active_tile_width_hint <= '0;
       active_tile_height_hint <= '0;
+    end else if (capture_active_q) begin
+      captured_descriptor_valid <= descriptor_snapshot.valid;
+      captured_layer_id <= descriptor_snapshot.layer_id;
+      captured_opcode <= descriptor_snapshot.opcode;
+      captured_last_layer <= descriptor_snapshot.last_layer;
+      captured_input_channels <= descriptor_snapshot.input_channels;
+      captured_output_channels <= descriptor_snapshot.output_channels;
+      captured_kernel_height <= descriptor_snapshot.kernel_height;
+      captured_kernel_width <= descriptor_snapshot.kernel_width;
+      captured_stride_y <= descriptor_snapshot.stride_y;
+      captured_stride_x <= descriptor_snapshot.stride_x;
+      captured_padding_top <= descriptor_snapshot.padding_top;
+      captured_padding_bottom <= descriptor_snapshot.padding_bottom;
+      captured_padding_left <= descriptor_snapshot.padding_left;
+      captured_padding_right <= descriptor_snapshot.padding_right;
+      captured_dilation_y <= descriptor_snapshot.dilation_y;
+      captured_dilation_x <= descriptor_snapshot.dilation_x;
+      captured_activation <= descriptor_snapshot.activation;
+      captured_residual_mode <= descriptor_snapshot.residual_mode;
+      active_input_tensor_id <= descriptor_snapshot.input_tensor_id;
+      active_output_tensor_id <= descriptor_snapshot.output_tensor_id;
+      active_input_ddr_offset <= descriptor_snapshot.input_ddr_offset;
+      active_input_allocation_size <=
+        descriptor_snapshot.input_allocation_size;
+      active_input_row_stride <= descriptor_snapshot.input_row_stride;
+      active_input_pixel_stride <= descriptor_snapshot.input_pixel_stride;
+      active_input_channel_stride <= descriptor_snapshot.input_channel_stride;
+      active_output_ddr_offset <= descriptor_snapshot.output_ddr_offset;
+      active_output_allocation_size <=
+        descriptor_snapshot.output_allocation_size;
+      active_output_row_stride <= descriptor_snapshot.output_row_stride;
+      active_output_pixel_stride <= descriptor_snapshot.output_pixel_stride;
+      active_output_channel_stride <=
+        descriptor_snapshot.output_channel_stride;
+      active_input_width <= descriptor_snapshot.input_width;
+      active_input_height <= descriptor_snapshot.input_height;
+      active_output_width <= descriptor_snapshot.output_width;
+      active_output_height <= descriptor_snapshot.output_height;
+      active_input_channels <= 8'(descriptor_snapshot.input_channels);
+      active_output_channels <= 8'(descriptor_snapshot.output_channels);
+      active_kernel_size <= 2'(descriptor_snapshot.kernel_width);
+      active_stride <= 2'(descriptor_snapshot.stride_x);
+      active_padding_left <= descriptor_snapshot.padding_left[0];
+      active_padding_right <= descriptor_snapshot.padding_right[0];
+      active_padding_top <= descriptor_snapshot.padding_top[0];
+      active_padding_bottom <= descriptor_snapshot.padding_bottom[0];
+      active_bias_enable <= descriptor_snapshot.bias_enable;
+      active_relu_enable <= descriptor_snapshot.activation == ACTIVATION_RELU;
+      active_tile_width_hint <= descriptor_snapshot.tile_width_hint;
+      active_tile_height_hint <= descriptor_snapshot.tile_height_hint;
+    end
+  end
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      state <= S_IDLE;
+      capture_active_q <= 1'b0;
+      layer_index <= '0;
+      layer_count_q <= '0;
+      previous_output_tensor_id <= '0;
+      previous_output_width <= '0;
+      previous_output_height <= '0;
+      previous_output_channels <= '0;
+      previous_output_ddr_offset <= '0;
+      expected_output_width_q <= '0;
+      expected_output_height_q <= '0;
+      output_width_numerator_q <= '0;
+      output_height_numerator_q <= '0;
+      output_width_geometry_valid_q <= 1'b0;
+      output_height_geometry_valid_q <= 1'b0;
+      minimum_input_allocation_q <= '0;
+      minimum_output_allocation_q <= '0;
+      minimum_input_row_stride_q <= '0;
+      minimum_output_row_stride_q <= '0;
+      input_row_span_q <= '0;
+      input_pixel_span_q <= '0;
+      input_channel_span_q <= '0;
+      output_row_span_q <= '0;
+      output_pixel_span_q <= '0;
+      output_channel_span_q <= '0;
+      minimum_input_row_stride_high_q <= '0;
+      minimum_output_row_stride_high_q <= '0;
+      input_row_span_high_q <= '0;
+      input_pixel_span_high_q <= '0;
+      input_channel_span_high_q <= '0;
+      output_row_span_high_q <= '0;
+      output_pixel_span_high_q <= '0;
+      output_channel_span_high_q <= '0;
+      input_allocation_partial_q <= '0;
+      output_allocation_partial_q <= '0;
+      input_width_extent_q <= '0;
+      input_height_extent_q <= '0;
+      input_channel_extent_q <= '0;
+      output_width_extent_q <= '0;
+      output_height_extent_q <= '0;
+      output_channel_extent_q <= '0;
       completed_layer_count <= '0;
       layer_done <= 1'b0;
       done <= 1'b0;
@@ -427,6 +652,7 @@ module cnn_tiled_multi_layer_controller #(
     end else begin
       layer_done <= 1'b0;
       done <= 1'b0;
+      capture_active_q <= 1'b0;
 
       if (clear) begin
         state <= S_IDLE;
@@ -460,9 +686,177 @@ module cnn_tiled_multi_layer_controller #(
                 state <= S_ERROR;
               end else begin
                 layer_count_q <= 4'(model_layer_count);
-                state <= S_CHECK_DESCRIPTOR;
+                state <= S_FETCH_DESCRIPTOR;
               end
             end
+          end
+
+          S_FETCH_DESCRIPTOR: begin
+            state <= S_WAIT_DESCRIPTOR;
+          end
+
+          S_WAIT_DESCRIPTOR: begin
+            if (descriptor_valid) begin
+              state <= S_CAPTURE_DESCRIPTOR;
+            end
+          end
+
+          S_CAPTURE_DESCRIPTOR: begin
+            capture_active_q <= 1'b1;
+            state <= S_LATCH_DESCRIPTOR;
+          end
+
+          S_LATCH_DESCRIPTOR: begin
+            state <= S_CALCULATE_DESCRIPTOR;
+          end
+
+          S_CALCULATE_DESCRIPTOR: begin
+            input_width_extent_q <= active_input_width - 16'd1;
+            input_height_extent_q <= active_input_height - 16'd1;
+            input_channel_extent_q <= captured_input_channels - 16'd1;
+            output_width_extent_q <= active_output_width - 16'd1;
+            output_height_extent_q <= active_output_height - 16'd1;
+            output_channel_extent_q <= captured_output_channels - 16'd1;
+            output_width_geometry_valid_q <=
+              (captured_stride_x != 0) &&
+                ((32'(active_input_width) +
+                  32'(captured_padding_left) +
+                  32'(captured_padding_right)) >=
+                 32'(captured_kernel_width));
+            output_height_geometry_valid_q <=
+              (captured_stride_y != 0) &&
+                ((32'(active_input_height) +
+                  32'(captured_padding_top) +
+                  32'(captured_padding_bottom)) >=
+                 32'(captured_kernel_height));
+            output_width_numerator_q <=
+              32'(active_input_width) + 32'(captured_padding_left) +
+              32'(captured_padding_right) - 32'(captured_kernel_width);
+            output_height_numerator_q <=
+              32'(active_input_height) + 32'(captured_padding_top) +
+              32'(captured_padding_bottom) - 32'(captured_kernel_height);
+
+            state <= S_MULTIPLY_DESCRIPTOR_SPANS;
+          end
+
+          S_MULTIPLY_DESCRIPTOR_SPANS: begin
+            expected_output_width_q <= 32'd0;
+            expected_output_height_q <= 32'd0;
+            if (output_width_geometry_valid_q) begin
+              expected_output_width_q <=
+                (captured_stride_x == 2) ?
+                  (output_width_numerator_q >> 1) + 32'd1 :
+                  output_width_numerator_q + 32'd1;
+            end
+            if (output_height_geometry_valid_q) begin
+              expected_output_height_q <=
+                (captured_stride_y == 2) ?
+                  (output_height_numerator_q >> 1) + 32'd1 :
+                  output_height_numerator_q + 32'd1;
+            end
+            minimum_input_row_stride_q <=
+              64'(multiply_16x16(
+                active_input_width,
+                active_input_pixel_stride[15:0]));
+            minimum_input_row_stride_high_q <=
+              multiply_16x16(
+                active_input_width,
+                active_input_pixel_stride[31:16]);
+            minimum_output_row_stride_q <=
+              64'(multiply_16x16(
+                active_output_width,
+                active_output_pixel_stride[15:0]));
+            minimum_output_row_stride_high_q <=
+              multiply_16x16(
+                active_output_width,
+                active_output_pixel_stride[31:16]);
+            input_row_span_q <=
+              64'(multiply_16x16(
+                input_height_extent_q,
+                active_input_row_stride[15:0]));
+            input_row_span_high_q <=
+              multiply_16x16(
+                input_height_extent_q,
+                active_input_row_stride[31:16]);
+            input_pixel_span_q <=
+              64'(multiply_16x16(
+                input_width_extent_q,
+                active_input_pixel_stride[15:0]));
+            input_pixel_span_high_q <=
+              multiply_16x16(
+                input_width_extent_q,
+                active_input_pixel_stride[31:16]);
+            input_channel_span_q <=
+              64'(multiply_16x16(
+                input_channel_extent_q,
+                active_input_channel_stride[15:0]));
+            input_channel_span_high_q <=
+              multiply_16x16(
+                input_channel_extent_q,
+                active_input_channel_stride[31:16]);
+            output_row_span_q <=
+              64'(multiply_16x16(
+                output_height_extent_q,
+                active_output_row_stride[15:0]));
+            output_row_span_high_q <=
+              multiply_16x16(
+                output_height_extent_q,
+                active_output_row_stride[31:16]);
+            output_pixel_span_q <=
+              64'(multiply_16x16(
+                output_width_extent_q,
+                active_output_pixel_stride[15:0]));
+            output_pixel_span_high_q <=
+              multiply_16x16(
+                output_width_extent_q,
+                active_output_pixel_stride[31:16]);
+            output_channel_span_q <= 64'(output_channel_extent_q);
+            output_channel_span_high_q <= '0;
+            state <= S_COMBINE_DESCRIPTOR_SPANS;
+          end
+
+          S_COMBINE_DESCRIPTOR_SPANS: begin
+            minimum_input_row_stride_q <= combine_stride_product(
+              minimum_input_row_stride_q[31:0],
+              minimum_input_row_stride_high_q);
+            minimum_output_row_stride_q <= combine_stride_product(
+              minimum_output_row_stride_q[31:0],
+              minimum_output_row_stride_high_q);
+            input_row_span_q <= combine_stride_product(
+              input_row_span_q[31:0],
+              input_row_span_high_q);
+            input_pixel_span_q <= combine_stride_product(
+              input_pixel_span_q[31:0],
+              input_pixel_span_high_q);
+            input_channel_span_q <= combine_stride_product(
+              input_channel_span_q[31:0],
+              input_channel_span_high_q);
+            output_row_span_q <= combine_stride_product(
+              output_row_span_q[31:0],
+              output_row_span_high_q);
+            output_pixel_span_q <= combine_stride_product(
+              output_pixel_span_q[31:0],
+              output_pixel_span_high_q);
+            output_channel_span_q <= combine_stride_product(
+              output_channel_span_q[31:0],
+              output_channel_span_high_q);
+            state <= S_SUM_ALLOCATION;
+          end
+
+          S_SUM_ALLOCATION: begin
+            input_allocation_partial_q <=
+              input_row_span_q + input_pixel_span_q;
+            output_allocation_partial_q <=
+              output_row_span_q + output_pixel_span_q;
+            state <= S_FINALIZE_ALLOCATION;
+          end
+
+          S_FINALIZE_ALLOCATION: begin
+            minimum_input_allocation_q <=
+              input_allocation_partial_q + input_channel_span_q + 64'd1;
+            minimum_output_allocation_q <=
+              output_allocation_partial_q + output_channel_span_q + 64'd1;
+            state <= S_CHECK_DESCRIPTOR;
           end
 
           S_CHECK_DESCRIPTOR: begin
@@ -472,39 +866,6 @@ module cnn_tiled_multi_layer_controller #(
               error_layer <= layer_index;
               state <= S_ERROR;
             end else begin
-              active_input_tensor_id <= descriptor_input_tensor_id;
-              active_output_tensor_id <= descriptor_output_tensor_id;
-              active_input_ddr_offset <= descriptor_input_ddr_offset;
-              active_input_allocation_size <=
-                descriptor_input_allocation_size;
-              active_input_row_stride <= descriptor_input_row_stride;
-              active_input_pixel_stride <= descriptor_input_pixel_stride;
-              active_input_channel_stride <=
-                descriptor_input_channel_stride;
-              active_output_ddr_offset <= descriptor_output_ddr_offset;
-              active_output_allocation_size <=
-                descriptor_output_allocation_size;
-              active_output_row_stride <= descriptor_output_row_stride;
-              active_output_pixel_stride <= descriptor_output_pixel_stride;
-              active_output_channel_stride <=
-                descriptor_output_channel_stride;
-              active_input_width <= descriptor_input_width;
-              active_input_height <= descriptor_input_height;
-              active_output_width <= descriptor_output_width;
-              active_output_height <= descriptor_output_height;
-              active_input_channels <= 8'(descriptor_input_channels);
-              active_output_channels <= 8'(descriptor_output_channels);
-              active_kernel_size <= 2'(descriptor_kernel_width);
-              active_stride <= 2'(descriptor_stride_x);
-              active_padding_left <= descriptor_padding_left[0];
-              active_padding_right <= descriptor_padding_right[0];
-              active_padding_top <= descriptor_padding_top[0];
-              active_padding_bottom <= descriptor_padding_bottom[0];
-              active_bias_enable <= descriptor_bias_enable;
-              active_relu_enable <=
-                descriptor_activation == ACTIVATION_RELU;
-              active_tile_width_hint <= descriptor_tile_width_hint;
-              active_tile_height_hint <= descriptor_tile_height_hint;
               state <= S_START_LAYER;
             end
           end
@@ -536,7 +897,7 @@ module cnn_tiled_multi_layer_controller #(
 
           S_ADVANCE_LAYER: begin
             layer_index <= layer_index + 3'd1;
-            state <= S_CHECK_DESCRIPTOR;
+            state <= S_FETCH_DESCRIPTOR;
           end
 
           S_DONE: begin

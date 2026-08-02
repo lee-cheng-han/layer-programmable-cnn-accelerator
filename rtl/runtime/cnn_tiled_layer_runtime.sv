@@ -100,6 +100,7 @@ module cnn_tiled_layer_runtime #(
     S_IDLE,
     S_WAIT_PARAMETER,
     S_WAIT_TILE,
+    S_CALCULATE_PAYLOAD,
     S_WAIT_INPUT,
     S_START_TILE,
     S_RUN_TILE,
@@ -130,8 +131,6 @@ module cnn_tiled_layer_runtime #(
   logic [DIM_W-1:0] planner_local_y_offset;
   logic [DIM_W-1:0] planner_padding_right_count;
   logic [DIM_W-1:0] planner_padding_bottom_count;
-  logic [31:0] planner_input_payload_bytes;
-  logic [31:0] planner_output_payload_bytes;
   logic planner_done;
   logic planner_error;
   logic [7:0] planner_error_code;
@@ -147,6 +146,8 @@ module cnn_tiled_layer_runtime #(
   logic [DIM_W-1:0] source_height_q;
   logic [DIM_W-1:0] local_x_offset_q;
   logic [DIM_W-1:0] local_y_offset_q;
+  logic [31:0] input_tile_area_q;
+  logic [31:0] output_tile_area_q;
   logic [31:0] input_payload_bytes_q;
   logic [31:0] output_payload_bytes_q;
 
@@ -193,6 +194,13 @@ module cnn_tiled_layer_runtime #(
   logic output_done_q;
   logic parameter_acquired_q;
   logic input_packet_accepted_q;
+
+  function automatic logic [23:0] multiply_area_channels(
+    input logic [15:0] area,
+    input logic [COUNT_W-1:0] channels
+  );
+    multiply_area_channels = area * channels;
+  endfunction
 
   assign busy = (state != S_IDLE) && (state != S_DONE);
   assign current_tile_x = tile_x_q;
@@ -258,8 +266,8 @@ module cnn_tiled_layer_runtime #(
     .local_y_offset(planner_local_y_offset),
     .padding_right_count(planner_padding_right_count),
     .padding_bottom_count(planner_padding_bottom_count),
-    .input_payload_bytes(planner_input_payload_bytes),
-    .output_payload_bytes(planner_output_payload_bytes),
+    .input_payload_bytes(),
+    .output_payload_bytes(),
     .busy(),
     .done(planner_done),
     .error(planner_error),
@@ -488,6 +496,8 @@ module cnn_tiled_layer_runtime #(
       source_height_q <= '0;
       local_x_offset_q <= '0;
       local_y_offset_q <= '0;
+      input_tile_area_q <= '0;
+      output_tile_area_q <= '0;
       input_payload_bytes_q <= '0;
       output_payload_bytes_q <= '0;
       compute_done_q <= 1'b0;
@@ -563,11 +573,22 @@ module cnn_tiled_layer_runtime #(
                 source_height_q <= planner_source_height;
                 local_x_offset_q <= planner_local_x_offset;
                 local_y_offset_q <= planner_local_y_offset;
-                input_payload_bytes_q <= planner_input_payload_bytes;
-                output_payload_bytes_q <= planner_output_payload_bytes;
+                input_tile_area_q <=
+                  32'(planner_local_input_width) *
+                  32'(planner_local_input_height);
+                output_tile_area_q <=
+                  32'(planner_tile_width) * 32'(planner_tile_height);
                 input_packet_accepted_q <= 1'b0;
-                state <= S_WAIT_INPUT;
+                state <= S_CALCULATE_PAYLOAD;
               end
+            end
+
+            S_CALCULATE_PAYLOAD: begin
+              input_payload_bytes_q <=
+                32'(multiply_area_channels(input_tile_area_q[15:0], cin));
+              output_payload_bytes_q <=
+                32'(multiply_area_channels(output_tile_area_q[15:0], cout));
+              state <= S_WAIT_INPUT;
             end
 
             S_WAIT_INPUT: begin

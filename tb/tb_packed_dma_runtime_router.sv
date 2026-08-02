@@ -453,7 +453,11 @@ module tb_packed_dma_runtime_router;
       end
       begin
         repeat (3) @(negedge clk);
-        check_value("activation backpressure", int'(s_axis_tready), 0);
+        check_value("activation elastic capacity", int'(s_axis_tready), 1);
+        check_value("activation buffered valid", int'(activation_valid), 1);
+        check_value("activation stalled byte count", activation_byte_count, 0);
+        check_value("activation buffered data", int'(activation_data),
+                    int'(32'h0403_0201));
         activation_ready = 1'b1;
       end
     join

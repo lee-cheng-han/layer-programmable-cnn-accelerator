@@ -188,10 +188,19 @@ experiment, not the board-integrated configuration. See
 [synthesis_experiments.md](docs/synthesis_experiments.md) for the complete
 configuration comparison.
 
+The layer-programmable PL top also closes two clean out-of-context physical
+searches at 125 MHz. The default run reports 0.087 ns setup and 0.086 ns hold
+slack; an independent Explore run reports 0.064 ns setup and 0.088 ns hold
+slack. Both have zero setup/hold failing endpoints and no congestion windows
+above level 5. See
+[programmable_top_implementation.md](docs/programmable_top_implementation.md)
+for the configuration, utilization, critical paths, and reproducible flow.
+
 Source evidence:
 
 - [Pre-board flow report](docs/logs/pre_board_flow_report.md)
 - [Board implementation report](docs/board_implementation.md)
+- [Programmable top implementation report](docs/programmable_top_implementation.md)
 - [Performance results](docs/performance_results.md)
 - [Vivado warning policy](docs/known_warnings.md)
 

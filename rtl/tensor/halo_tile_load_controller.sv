@@ -67,8 +67,10 @@ module halo_tile_load_controller #(
   localparam logic [7:0] LOAD_ERROR_EARLY_LAST = 8'd5;
   localparam logic [7:0] LOAD_ERROR_MISSING_LAST = 8'd6;
 
-  typedef enum logic [2:0] {
+  typedef enum logic [3:0] {
     S_IDLE,
+    S_VALIDATE_CONTEXT,
+    S_CALC_ORIGIN,
     S_CLEAR,
     S_WAIT_BEAT,
     S_WRITE_BYTES,
@@ -79,17 +81,24 @@ module halo_tile_load_controller #(
 
   state_t state;
   logic [DIM_W-1:0] local_input_width_q;
-  logic [DIM_W-1:0] local_input_height_q;
   logic [DIM_W-1:0] source_width_q;
-  logic [DIM_W-1:0] local_x_offset_q;
   logic [DIM_W-1:0] local_y_offset_q;
   logic [COUNT_W-1:0] input_channels_q;
   logic [31:0] expected_payload_bytes_q;
+  logic [31:0] local_input_area_q;
+  logic context_bounds_valid_q;
+  logic metadata_valid_q;
+  logic payload_length_valid_q;
 
   logic [ADDR_W-1:0] clear_pixel;
   logic [COUNT_W-1:0] clear_channel;
+  logic [DIM_W-1:0] origin_row_count;
+  logic [ADDR_W-1:0] payload_write_pixel;
   logic [DIM_W-1:0] payload_x;
   logic [DIM_W-1:0] payload_y;
+  logic [DIM_W-1:0] payload_columns_remaining_q;
+  logic payload_row_end_q;
+  logic [ADDR_W-1:0] payload_row_advance_q;
   logic [COUNT_W-1:0] payload_channel;
   logic [31:0] payload_byte_count;
   logic [31:0] beat_data_q;
@@ -98,26 +107,24 @@ module halo_tile_load_controller #(
   logic [1:0] beat_lane;
   logic [2:0] beat_byte_count;
   logic metadata_valid;
-  logic context_valid;
+  logic context_bounds_valid;
   logic keep_valid;
   logic payload_transfer;
 
-  assign context_valid =
+  assign context_bounds_valid =
     expected_valid &&
     (local_input_width != '0) &&
     (local_input_height != '0) &&
     (source_width != '0) &&
     (source_height != '0) &&
     (input_channels != '0) &&
-    ((32'(local_input_width) * 32'(local_input_height)) <=
-     32'(MAX_LOCAL_PIXELS)) &&
     (input_channels <= COUNT_W'(MAX_CHANNELS)) &&
     ((32'(local_x_offset) + 32'(source_width)) <=
      32'(local_input_width)) &&
     ((32'(local_y_offset) + 32'(source_height)) <=
      32'(local_input_height)) &&
-    (expected_payload_bytes ==
-     (32'(source_width) * 32'(source_height) * 32'(input_channels)));
+    (expected_payload_bytes != 0) &&
+    (expected_payload_bytes <= 32'(MAX_LOCAL_PIXELS * MAX_CHANNELS));
 
   assign metadata_valid =
     (packet_job_id == expected_job_id) &&
@@ -154,10 +161,7 @@ module halo_tile_load_controller #(
       scratch_write_channel = clear_channel;
     end else if (state == S_WRITE_BYTES) begin
       scratch_write_enable = 1'b1;
-      scratch_write_pixel =
-        (ADDR_W'(payload_y + local_y_offset_q) *
-         ADDR_W'(local_input_width_q)) +
-        ADDR_W'(payload_x + local_x_offset_q);
+      scratch_write_pixel = payload_write_pixel;
       scratch_write_channel = payload_channel;
       scratch_write_data =
         $signed(beat_data_q[(int'(beat_lane) * 8) +: 8]);
@@ -168,16 +172,23 @@ module halo_tile_load_controller #(
     if (!rst_n) begin
       state <= S_IDLE;
       local_input_width_q <= '0;
-      local_input_height_q <= '0;
       source_width_q <= '0;
-      local_x_offset_q <= '0;
       local_y_offset_q <= '0;
       input_channels_q <= '0;
       expected_payload_bytes_q <= '0;
+      local_input_area_q <= '0;
+      context_bounds_valid_q <= 1'b0;
+      metadata_valid_q <= 1'b0;
+      payload_length_valid_q <= 1'b0;
       clear_pixel <= '0;
       clear_channel <= '0;
+      origin_row_count <= '0;
+      payload_write_pixel <= '0;
       payload_x <= '0;
       payload_y <= '0;
+      payload_columns_remaining_q <= '0;
+      payload_row_end_q <= 1'b0;
+      payload_row_advance_q <= '0;
       payload_channel <= '0;
       payload_byte_count <= '0;
       beat_data_q <= '0;
@@ -200,33 +211,59 @@ module halo_tile_load_controller #(
             if (packet_start) begin
               error <= 1'b0;
               error_code <= LOAD_ERROR_NONE;
-              if (!context_valid) begin
-                error <= 1'b1;
-                error_code <= LOAD_ERROR_CONTEXT;
-                state <= S_DROP;
-              end else if (!metadata_valid) begin
-                error <= 1'b1;
-                error_code <=
-                  (packet_payload_length != expected_payload_bytes) ?
-                    LOAD_ERROR_PAYLOAD_LENGTH :
-                    LOAD_ERROR_PACKET_METADATA;
-                state <= S_DROP;
-              end else begin
-                local_input_width_q <= local_input_width;
-                local_input_height_q <= local_input_height;
-                source_width_q <= source_width;
-                local_x_offset_q <= local_x_offset;
-                local_y_offset_q <= local_y_offset;
-                input_channels_q <= input_channels;
-                expected_payload_bytes_q <= expected_payload_bytes;
-                clear_pixel <= '0;
-                clear_channel <= '0;
-                payload_x <= '0;
-                payload_y <= '0;
-                payload_channel <= '0;
-                payload_byte_count <= '0;
-                state <= S_CLEAR;
-              end
+              local_input_width_q <= local_input_width;
+              source_width_q <= source_width;
+              local_y_offset_q <= local_y_offset;
+              input_channels_q <= input_channels;
+              expected_payload_bytes_q <= expected_payload_bytes;
+              local_input_area_q <=
+                32'(local_input_width) * 32'(local_input_height);
+              context_bounds_valid_q <= context_bounds_valid;
+              metadata_valid_q <= metadata_valid;
+              payload_length_valid_q <=
+                packet_payload_length == expected_payload_bytes;
+              clear_pixel <= '0;
+              clear_channel <= '0;
+              origin_row_count <= '0;
+              payload_write_pixel <= ADDR_W'(local_x_offset);
+              payload_x <= '0;
+              payload_y <= '0;
+              payload_columns_remaining_q <= source_width;
+              payload_row_end_q <= source_width == DIM_W'(1);
+              payload_row_advance_q <=
+                ADDR_W'(local_input_width) - ADDR_W'(source_width) +
+                ADDR_W'(1);
+              payload_channel <= '0;
+              payload_byte_count <= '0;
+              state <= S_VALIDATE_CONTEXT;
+            end
+          end
+
+          S_VALIDATE_CONTEXT: begin
+            if (!context_bounds_valid_q ||
+                (local_input_area_q > 32'(MAX_LOCAL_PIXELS))) begin
+              error <= 1'b1;
+              error_code <= LOAD_ERROR_CONTEXT;
+              state <= S_DROP;
+            end else if (!metadata_valid_q) begin
+              error <= 1'b1;
+              error_code <=
+                !payload_length_valid_q ?
+                  LOAD_ERROR_PAYLOAD_LENGTH :
+                  LOAD_ERROR_PACKET_METADATA;
+              state <= S_DROP;
+            end else begin
+              state <= S_CALC_ORIGIN;
+            end
+          end
+
+          S_CALC_ORIGIN: begin
+            if (origin_row_count < local_y_offset_q) begin
+              origin_row_count <= origin_row_count + DIM_W'(1);
+              payload_write_pixel <=
+                payload_write_pixel + ADDR_W'(local_input_width_q);
+            end else begin
+              state <= S_CLEAR;
             end
           end
 
@@ -236,8 +273,7 @@ module halo_tile_load_controller #(
             end else begin
               clear_channel <= '0;
               if ((clear_pixel + ADDR_W'(1)) <
-                  (ADDR_W'(local_input_width_q) *
-                   ADDR_W'(local_input_height_q))) begin
+                  ADDR_W'(local_input_area_q)) begin
                 clear_pixel <= clear_pixel + ADDR_W'(1);
               end else begin
                 state <= S_WAIT_BEAT;
@@ -268,11 +304,21 @@ module halo_tile_load_controller #(
               payload_channel <= payload_channel + COUNT_W'(1);
             end else begin
               payload_channel <= '0;
-              if ((payload_x + DIM_W'(1)) < source_width_q) begin
+              if (!payload_row_end_q) begin
                 payload_x <= payload_x + DIM_W'(1);
+                payload_columns_remaining_q <=
+                  payload_columns_remaining_q - DIM_W'(1);
+                payload_row_end_q <=
+                  payload_columns_remaining_q == DIM_W'(2);
+                payload_write_pixel <=
+                  payload_write_pixel + ADDR_W'(1);
               end else begin
                 payload_x <= '0;
                 payload_y <= payload_y + DIM_W'(1);
+                payload_columns_remaining_q <= source_width_q;
+                payload_row_end_q <= source_width_q == DIM_W'(1);
+                payload_write_pixel <=
+                  payload_write_pixel + payload_row_advance_q;
               end
             end
 

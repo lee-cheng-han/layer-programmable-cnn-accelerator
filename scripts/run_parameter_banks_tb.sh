@@ -21,6 +21,7 @@ verilator --binary --timing \
  -Wno-UNUSEDPARAM \
  --top-module tb_runtime_parameter_banks \
  rtl/tensor/weight_scratchpad.sv \
+ rtl/tensor/banked_weight_scratchpad.sv \
  rtl/tensor/ping_pong_weight_scratchpad.sv \
  rtl/runtime/cnn_runtime_parameter_banks.sv \
  tb/tb_runtime_parameter_banks.sv \

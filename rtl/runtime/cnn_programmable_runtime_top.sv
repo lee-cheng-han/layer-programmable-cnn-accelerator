@@ -160,6 +160,15 @@ module cnn_programmable_runtime_top #(
   logic parameter_load_done;
   logic parameter_error;
   logic [7:0] parameter_error_code;
+  logic parameter_config_valid_q;
+  logic [2:0] parameter_config_layer_id_q;
+  logic [1:0] parameter_config_kernel_size_q;
+  logic [7:0] parameter_config_cin_q;
+  logic [7:0] parameter_config_cout_q;
+  logic parameter_config_bias_enable_q;
+  logic [15:0] parameter_config_weight_bytes_q;
+  logic [15:0] parameter_config_bias_bytes_q;
+  logic [31:0] parameter_config_crc32_q;
 
   logic activation_packet_start;
   logic activation_packet_ready;
@@ -206,6 +215,32 @@ module cnn_programmable_runtime_top #(
                       (router_error ? {1'b1, router_error_code[6:0]} :
                        (parameter_error ? {2'b11, parameter_error_code[5:0]} :
                         parser_error_code));
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      parameter_config_valid_q <= 1'b0;
+      parameter_config_layer_id_q <= '0;
+      parameter_config_kernel_size_q <= '0;
+      parameter_config_cin_q <= '0;
+      parameter_config_cout_q <= '0;
+      parameter_config_bias_enable_q <= 1'b0;
+      parameter_config_weight_bytes_q <= '0;
+      parameter_config_bias_bytes_q <= '0;
+      parameter_config_crc32_q <= '0;
+    end else begin
+      parameter_config_valid_q <=
+        !clear && descriptor_valid && !busy &&
+        (descriptor_layer_id == 16'(parameter_layer_select));
+      parameter_config_layer_id_q <= parameter_layer_select;
+      parameter_config_kernel_size_q <= descriptor_kernel_width[1:0];
+      parameter_config_cin_q <= descriptor_input_channels[7:0];
+      parameter_config_cout_q <= descriptor_output_channels[7:0];
+      parameter_config_bias_enable_q <= descriptor_bias_enable;
+      parameter_config_weight_bytes_q <= descriptor_weight_size[15:0];
+      parameter_config_bias_bytes_q <= descriptor_bias_size[15:0];
+      parameter_config_crc32_q <= descriptor_parameter_crc32;
+    end
+  end
 
   cnn_model_metadata_store #(
     .MAX_LAYERS(MAX_LAYERS),
@@ -324,17 +359,17 @@ module cnn_programmable_runtime_top #(
     .payload_valid(payload_valid), .payload_ready(payload_ready),
     .payload_data(payload_data), .payload_keep(payload_keep),
     .payload_last(payload_last),
-    .parameter_config_valid(descriptor_valid && !busy),
-    .parameter_config_layer_id(parameter_layer_select),
-    .parameter_config_kernel_size(descriptor_kernel_width[1:0]),
-    .parameter_config_cin(descriptor_input_channels[7:0]),
-    .parameter_config_cout(descriptor_output_channels[7:0]),
-    .parameter_config_bias_enable(descriptor_bias_enable),
+    .parameter_config_valid(parameter_config_valid_q),
+    .parameter_config_layer_id(parameter_config_layer_id_q),
+    .parameter_config_kernel_size(parameter_config_kernel_size_q),
+    .parameter_config_cin(parameter_config_cin_q),
+    .parameter_config_cout(parameter_config_cout_q),
+    .parameter_config_bias_enable(parameter_config_bias_enable_q),
     .parameter_config_quant_enable(1'b0),
     .parameter_config_quant_shift(5'd0),
-    .parameter_config_weight_bytes(descriptor_weight_size[15:0]),
-    .parameter_config_bias_bytes(descriptor_bias_size[15:0]),
-    .parameter_config_crc32(descriptor_parameter_crc32),
+    .parameter_config_weight_bytes(parameter_config_weight_bytes_q),
+    .parameter_config_bias_bytes(parameter_config_bias_bytes_q),
+    .parameter_config_crc32(parameter_config_crc32_q),
     .parameter_load_start(parameter_load_start),
     .parameter_load_abort(parameter_load_abort),
     .parameter_load_ready(parameter_load_ready),

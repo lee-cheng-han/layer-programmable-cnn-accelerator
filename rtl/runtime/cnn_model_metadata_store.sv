@@ -159,163 +159,290 @@ module cnn_model_metadata_store #(
   logic quant_id_valid;
 
   logic metadata_address_valid;
+  logic metadata_write_q;
+  logic [1:0] metadata_write_kind_q;
+  logic [31:0] metadata_write_data_q;
   logic validation_ok;
   logic [7:0] validation_error;
 
-  always_comb begin
-    logic [15:0] input_tensor_id;
-    logic [15:0] output_tensor_id;
+  typedef struct packed {
+    logic valid;
+    logic bank;
+    logic [2:0] layer_index;
+    logic [15:0] tensor_count;
+    logic [31:0] identity;
+    logic [31:0] flags;
+    logic [31:0] tensor_ids;
+    logic [31:0] residual_quant;
+    logic [31:0] weight_size;
+    logic [31:0] bias_size;
+    logic [31:0] parameter_crc32;
+    logic [31:0] geometry;
+    logic [31:0] padding;
+    logic [31:0] postprocess;
+    logic [31:0] tile_hints;
+  } execution_layer_lookup_t;
+
+  typedef struct packed {
+    logic valid;
+    logic [31:0] geometry;
+    logic [31:0] channels;
+    logic [63:0] ddr_offset;
+    logic [31:0] allocation_size;
+    logic [31:0] row_stride;
+    logic [31:0] pixel_stride;
+    logic [31:0] channel_stride;
+  } execution_tensor_lookup_t;
+
+  execution_layer_lookup_t execution_layer_lookup_q;
+  execution_layer_lookup_t execution_layer_lookup_qq;
+  execution_tensor_lookup_t execution_input_tensor_lookup_q [0:1];
+  execution_tensor_lookup_t execution_output_tensor_lookup_q [0:1];
+
+  always_ff @(posedge clk or negedge resetn) begin
     int unsigned layer_slot;
+    if (!resetn) begin
+      execution_layer_lookup_q <= '0;
+    end else begin
+      execution_layer_lookup_q <= '0;
+      layer_slot = int'(execution_layer_index);
+      if (active_valid &&
+          (layer_slot < MAX_LAYERS) &&
+          (layer_slot < int'(cached_counts0[active_bank][15:0]))) begin
+        execution_layer_lookup_q.valid <= 1'b1;
+        execution_layer_lookup_q.bank <= active_bank;
+        execution_layer_lookup_q.layer_index <= execution_layer_index;
+        execution_layer_lookup_q.tensor_count <=
+          cached_counts0[active_bank][31:16];
+        execution_layer_lookup_q.identity <=
+          cached_layer_identity[active_bank][layer_slot];
+        execution_layer_lookup_q.flags <=
+          cached_layer_flags[active_bank][layer_slot];
+        execution_layer_lookup_q.tensor_ids <=
+          cached_layer_tensor_ids[active_bank][layer_slot];
+        execution_layer_lookup_q.residual_quant <=
+          cached_layer_residual_quant[active_bank][layer_slot];
+        execution_layer_lookup_q.weight_size <=
+          cached_layer_weight_size[active_bank][layer_slot];
+        execution_layer_lookup_q.bias_size <=
+          cached_layer_bias_size[active_bank][layer_slot];
+        execution_layer_lookup_q.parameter_crc32 <=
+          cached_layer_parameter_crc32[active_bank][layer_slot];
+        execution_layer_lookup_q.geometry <=
+          cached_layer_geometry[active_bank][layer_slot];
+        execution_layer_lookup_q.padding <=
+          cached_layer_padding[active_bank][layer_slot];
+        execution_layer_lookup_q.postprocess <=
+          cached_layer_postprocess[active_bank][layer_slot];
+        execution_layer_lookup_q.tile_hints <=
+          cached_layer_tile_hints[active_bank][layer_slot];
+      end
+    end
+  end
+
+  always_ff @(posedge clk or negedge resetn) begin
     int unsigned input_slot;
     int unsigned output_slot;
+    if (!resetn) begin
+      execution_layer_lookup_qq <= '0;
+      for (int bank = 0; bank < 2; bank++) begin
+        execution_input_tensor_lookup_q[bank] <= '0;
+        execution_output_tensor_lookup_q[bank] <= '0;
+      end
+    end else begin
+      execution_layer_lookup_qq <= execution_layer_lookup_q;
+      input_slot = int'(execution_layer_lookup_q.tensor_ids[15:0]);
+      output_slot = int'(execution_layer_lookup_q.tensor_ids[31:16]);
+      for (int bank = 0; bank < 2; bank++) begin
+        execution_input_tensor_lookup_q[bank] <= '0;
+        execution_output_tensor_lookup_q[bank] <= '0;
+        if (execution_layer_lookup_q.valid &&
+            (input_slot < MAX_TENSORS) &&
+            (output_slot < MAX_TENSORS) &&
+            (input_slot < int'(execution_layer_lookup_q.tensor_count)) &&
+            (output_slot < int'(execution_layer_lookup_q.tensor_count))) begin
+          execution_input_tensor_lookup_q[bank].valid <= 1'b1;
+          execution_input_tensor_lookup_q[bank].geometry <=
+            cached_tensor_geometry[bank][input_slot];
+          execution_input_tensor_lookup_q[bank].channels <=
+            cached_tensor_channels[bank][input_slot];
+          execution_input_tensor_lookup_q[bank].ddr_offset <=
+            cached_tensor_ddr_offset[bank][input_slot];
+          execution_input_tensor_lookup_q[bank].allocation_size <=
+            cached_tensor_allocation_size[bank][input_slot];
+          execution_input_tensor_lookup_q[bank].row_stride <=
+            cached_tensor_row_stride[bank][input_slot];
+          execution_input_tensor_lookup_q[bank].pixel_stride <=
+            cached_tensor_pixel_stride[bank][input_slot];
+          execution_input_tensor_lookup_q[bank].channel_stride <=
+            cached_tensor_channel_stride[bank][input_slot];
+          execution_output_tensor_lookup_q[bank].valid <= 1'b1;
+          execution_output_tensor_lookup_q[bank].geometry <=
+            cached_tensor_geometry[bank][output_slot];
+          execution_output_tensor_lookup_q[bank].channels <=
+            cached_tensor_channels[bank][output_slot];
+          execution_output_tensor_lookup_q[bank].ddr_offset <=
+            cached_tensor_ddr_offset[bank][output_slot];
+          execution_output_tensor_lookup_q[bank].allocation_size <=
+            cached_tensor_allocation_size[bank][output_slot];
+          execution_output_tensor_lookup_q[bank].row_stride <=
+            cached_tensor_row_stride[bank][output_slot];
+          execution_output_tensor_lookup_q[bank].pixel_stride <=
+            cached_tensor_pixel_stride[bank][output_slot];
+          execution_output_tensor_lookup_q[bank].channel_stride <=
+            cached_tensor_channel_stride[bank][output_slot];
+        end
+      end
+    end
+  end
 
-    execution_descriptor_valid = 1'b0;
-    execution_layer_id = 16'd0;
-    execution_opcode = 16'd0;
-    execution_last_layer = 1'b0;
-    execution_bias_enable = 1'b0;
-    execution_input_tensor_id = 16'd0;
-    execution_output_tensor_id = 16'd0;
-    execution_residual_tensor_id = NO_TENSOR_ID;
-    execution_quantization_id = 16'd0;
-    execution_weight_size = 32'd0;
-    execution_bias_size = 32'd0;
-    execution_parameter_crc32 = 32'd0;
-    execution_input_width = 16'd0;
-    execution_input_height = 16'd0;
-    execution_input_channels = 16'd0;
-    execution_output_width = 16'd0;
-    execution_output_height = 16'd0;
-    execution_output_channels = 16'd0;
-    execution_kernel_height = 8'd0;
-    execution_kernel_width = 8'd0;
-    execution_stride_y = 8'd0;
-    execution_stride_x = 8'd0;
-    execution_padding_top = 8'd0;
-    execution_padding_bottom = 8'd0;
-    execution_padding_left = 8'd0;
-    execution_padding_right = 8'd0;
-    execution_dilation_y = 8'd0;
-    execution_dilation_x = 8'd0;
-    execution_activation = 8'd0;
-    execution_residual_mode = 8'd0;
-    execution_tile_height_hint = 16'd0;
-    execution_tile_width_hint = 16'd0;
-    execution_input_ddr_offset = 64'd0;
-    execution_input_allocation_size = 32'd0;
-    execution_input_row_stride = 32'd0;
-    execution_input_pixel_stride = 32'd0;
-    execution_input_channel_stride = 32'd0;
-    execution_output_ddr_offset = 64'd0;
-    execution_output_allocation_size = 32'd0;
-    execution_output_row_stride = 32'd0;
-    execution_output_pixel_stride = 32'd0;
-    execution_output_channel_stride = 32'd0;
+  always_ff @(posedge clk or negedge resetn) begin
+    if (!resetn) begin
+      execution_descriptor_valid <= 1'b0;
+      execution_layer_id <= 16'd0;
+      execution_opcode <= 16'd0;
+      execution_last_layer <= 1'b0;
+      execution_bias_enable <= 1'b0;
+      execution_input_tensor_id <= 16'd0;
+      execution_output_tensor_id <= 16'd0;
+      execution_residual_tensor_id <= NO_TENSOR_ID;
+      execution_quantization_id <= 16'd0;
+      execution_weight_size <= 32'd0;
+      execution_bias_size <= 32'd0;
+      execution_parameter_crc32 <= 32'd0;
+      execution_input_width <= 16'd0;
+      execution_input_height <= 16'd0;
+      execution_input_channels <= 16'd0;
+      execution_output_width <= 16'd0;
+      execution_output_height <= 16'd0;
+      execution_output_channels <= 16'd0;
+      execution_kernel_height <= 8'd0;
+      execution_kernel_width <= 8'd0;
+      execution_stride_y <= 8'd0;
+      execution_stride_x <= 8'd0;
+      execution_padding_top <= 8'd0;
+      execution_padding_bottom <= 8'd0;
+      execution_padding_left <= 8'd0;
+      execution_padding_right <= 8'd0;
+      execution_dilation_y <= 8'd0;
+      execution_dilation_x <= 8'd0;
+      execution_activation <= 8'd0;
+      execution_residual_mode <= 8'd0;
+      execution_tile_height_hint <= 16'd0;
+      execution_tile_width_hint <= 16'd0;
+      execution_input_ddr_offset <= 64'd0;
+      execution_input_allocation_size <= 32'd0;
+      execution_input_row_stride <= 32'd0;
+      execution_input_pixel_stride <= 32'd0;
+      execution_input_channel_stride <= 32'd0;
+      execution_output_ddr_offset <= 64'd0;
+      execution_output_allocation_size <= 32'd0;
+      execution_output_row_stride <= 32'd0;
+      execution_output_pixel_stride <= 32'd0;
+      execution_output_channel_stride <= 32'd0;
+    end else begin
+      execution_descriptor_valid <= 1'b0;
+      execution_layer_id <= execution_layer_lookup_qq.identity[15:0];
+      execution_opcode <= execution_layer_lookup_qq.identity[31:16];
+      execution_last_layer <=
+        (execution_layer_lookup_qq.flags & LAYER_FLAG_LAST_LAYER) != 0;
+      execution_bias_enable <=
+        (execution_layer_lookup_qq.flags & LAYER_FLAG_BIAS_ENABLE) != 0;
+      execution_input_tensor_id <= execution_layer_lookup_qq.tensor_ids[15:0];
+      execution_output_tensor_id <= execution_layer_lookup_qq.tensor_ids[31:16];
+      execution_residual_tensor_id <=
+        execution_layer_lookup_qq.residual_quant[15:0];
+      execution_quantization_id <=
+        execution_layer_lookup_qq.residual_quant[31:16];
+      execution_weight_size <= execution_layer_lookup_qq.weight_size;
+      execution_bias_size <= execution_layer_lookup_qq.bias_size;
+      execution_parameter_crc32 <= execution_layer_lookup_qq.parameter_crc32;
+      execution_kernel_height <= execution_layer_lookup_qq.geometry[7:0];
+      execution_kernel_width <= execution_layer_lookup_qq.geometry[15:8];
+      execution_stride_y <= execution_layer_lookup_qq.geometry[23:16];
+      execution_stride_x <= execution_layer_lookup_qq.geometry[31:24];
+      execution_padding_top <= execution_layer_lookup_qq.padding[7:0];
+      execution_padding_bottom <= execution_layer_lookup_qq.padding[15:8];
+      execution_padding_left <= execution_layer_lookup_qq.padding[23:16];
+      execution_padding_right <= execution_layer_lookup_qq.padding[31:24];
+      execution_dilation_y <= execution_layer_lookup_qq.postprocess[7:0];
+      execution_dilation_x <= execution_layer_lookup_qq.postprocess[15:8];
+      execution_activation <= execution_layer_lookup_qq.postprocess[23:16];
+      execution_residual_mode <= execution_layer_lookup_qq.postprocess[31:24];
+      execution_tile_height_hint <= execution_layer_lookup_qq.tile_hints[15:0];
+      execution_tile_width_hint <= execution_layer_lookup_qq.tile_hints[31:16];
+      execution_input_width <= 16'd0;
+      execution_input_height <= 16'd0;
+      execution_input_channels <= 16'd0;
+      execution_output_width <= 16'd0;
+      execution_output_height <= 16'd0;
+      execution_output_channels <= 16'd0;
+      execution_input_ddr_offset <= 64'd0;
+      execution_input_allocation_size <= 32'd0;
+      execution_input_row_stride <= 32'd0;
+      execution_input_pixel_stride <= 32'd0;
+      execution_input_channel_stride <= 32'd0;
+      execution_output_ddr_offset <= 64'd0;
+      execution_output_allocation_size <= 32'd0;
+      execution_output_row_stride <= 32'd0;
+      execution_output_pixel_stride <= 32'd0;
+      execution_output_channel_stride <= 32'd0;
 
-    layer_slot = int'(execution_layer_index);
-    input_tensor_id = 16'd0;
-    output_tensor_id = 16'd0;
-    input_slot = 0;
-    output_slot = 0;
-
-    if (active_valid &&
-        (layer_slot < MAX_LAYERS) &&
-        (layer_slot < int'(cached_counts0[active_bank][15:0]))) begin
-      input_tensor_id = cached_layer_tensor_ids[active_bank][layer_slot][15:0];
-      output_tensor_id = cached_layer_tensor_ids[active_bank][layer_slot][31:16];
-      input_slot = int'(input_tensor_id);
-      output_slot = int'(output_tensor_id);
-
-      execution_layer_id = cached_layer_identity[active_bank][layer_slot][15:0];
-      execution_opcode = cached_layer_identity[active_bank][layer_slot][31:16];
-      execution_last_layer =
-        (cached_layer_flags[active_bank][layer_slot] & LAYER_FLAG_LAST_LAYER) != 0;
-      execution_bias_enable =
-        (cached_layer_flags[active_bank][layer_slot] & LAYER_FLAG_BIAS_ENABLE) != 0;
-      execution_input_tensor_id = input_tensor_id;
-      execution_output_tensor_id = output_tensor_id;
-      execution_residual_tensor_id =
-        cached_layer_residual_quant[active_bank][layer_slot][15:0];
-      execution_quantization_id =
-        cached_layer_residual_quant[active_bank][layer_slot][31:16];
-      execution_weight_size =
-        cached_layer_weight_size[active_bank][layer_slot];
-      execution_bias_size =
-        cached_layer_bias_size[active_bank][layer_slot];
-      execution_parameter_crc32 =
-        cached_layer_parameter_crc32[active_bank][layer_slot];
-      execution_kernel_height =
-        cached_layer_geometry[active_bank][layer_slot][7:0];
-      execution_kernel_width =
-        cached_layer_geometry[active_bank][layer_slot][15:8];
-      execution_stride_y =
-        cached_layer_geometry[active_bank][layer_slot][23:16];
-      execution_stride_x =
-        cached_layer_geometry[active_bank][layer_slot][31:24];
-      execution_padding_top =
-        cached_layer_padding[active_bank][layer_slot][7:0];
-      execution_padding_bottom =
-        cached_layer_padding[active_bank][layer_slot][15:8];
-      execution_padding_left =
-        cached_layer_padding[active_bank][layer_slot][23:16];
-      execution_padding_right =
-        cached_layer_padding[active_bank][layer_slot][31:24];
-      execution_dilation_y =
-        cached_layer_postprocess[active_bank][layer_slot][7:0];
-      execution_dilation_x =
-        cached_layer_postprocess[active_bank][layer_slot][15:8];
-      execution_activation =
-        cached_layer_postprocess[active_bank][layer_slot][23:16];
-      execution_residual_mode =
-        cached_layer_postprocess[active_bank][layer_slot][31:24];
-      execution_tile_height_hint =
-        cached_layer_tile_hints[active_bank][layer_slot][15:0];
-      execution_tile_width_hint =
-        cached_layer_tile_hints[active_bank][layer_slot][31:16];
-
-      if ((input_slot < MAX_TENSORS) && (output_slot < MAX_TENSORS)) begin
-        execution_input_width =
-          cached_tensor_geometry[active_bank][input_slot][15:0];
-        execution_input_height =
-          cached_tensor_geometry[active_bank][input_slot][31:16];
-        execution_input_channels =
-          cached_tensor_channels[active_bank][input_slot][15:0];
-        execution_output_width =
-          cached_tensor_geometry[active_bank][output_slot][15:0];
-        execution_output_height =
-          cached_tensor_geometry[active_bank][output_slot][31:16];
-        execution_output_channels =
-          cached_tensor_channels[active_bank][output_slot][15:0];
-        execution_input_ddr_offset =
-          cached_tensor_ddr_offset[active_bank][input_slot];
-        execution_input_allocation_size =
-          cached_tensor_allocation_size[active_bank][input_slot];
-        execution_input_row_stride =
-          cached_tensor_row_stride[active_bank][input_slot];
-        execution_input_pixel_stride =
-          cached_tensor_pixel_stride[active_bank][input_slot];
-        execution_input_channel_stride =
-          cached_tensor_channel_stride[active_bank][input_slot];
-        execution_output_ddr_offset =
-          cached_tensor_ddr_offset[active_bank][output_slot];
-        execution_output_allocation_size =
-          cached_tensor_allocation_size[active_bank][output_slot];
-        execution_output_row_stride =
-          cached_tensor_row_stride[active_bank][output_slot];
-        execution_output_pixel_stride =
-          cached_tensor_pixel_stride[active_bank][output_slot];
-        execution_output_channel_stride =
-          cached_tensor_channel_stride[active_bank][output_slot];
-
-        execution_descriptor_valid =
-          (cached_layer_header[active_bank][layer_slot] ==
-           {16'(LAYER_DESCRIPTOR_BYTES), 16'(ABI_VERSION)}) &&
-          (cached_tensor_header[active_bank][input_slot] ==
-           {16'(TENSOR_DESCRIPTOR_BYTES), 16'(ABI_VERSION)}) &&
-          (cached_tensor_header[active_bank][output_slot] ==
-           {16'(TENSOR_DESCRIPTOR_BYTES), 16'(ABI_VERSION)}) &&
-          (cached_tensor_identity[active_bank][input_slot][15:0] == input_tensor_id) &&
-          (cached_tensor_identity[active_bank][output_slot][15:0] == output_tensor_id);
+      if (execution_layer_lookup_qq.valid &&
+          active_valid &&
+          (execution_layer_lookup_qq.bank == active_bank) &&
+          (execution_layer_lookup_qq.layer_index == execution_layer_index) &&
+          execution_input_tensor_lookup_q[execution_layer_lookup_qq.bank].valid &&
+          execution_output_tensor_lookup_q[execution_layer_lookup_qq.bank].valid) begin
+        execution_input_width <=
+          execution_input_tensor_lookup_q[
+            execution_layer_lookup_qq.bank].geometry[15:0];
+        execution_input_height <=
+          execution_input_tensor_lookup_q[
+            execution_layer_lookup_qq.bank].geometry[31:16];
+        execution_input_channels <=
+          execution_input_tensor_lookup_q[
+            execution_layer_lookup_qq.bank].channels[15:0];
+        execution_output_width <=
+          execution_output_tensor_lookup_q[
+            execution_layer_lookup_qq.bank].geometry[15:0];
+        execution_output_height <=
+          execution_output_tensor_lookup_q[
+            execution_layer_lookup_qq.bank].geometry[31:16];
+        execution_output_channels <=
+          execution_output_tensor_lookup_q[
+            execution_layer_lookup_qq.bank].channels[15:0];
+        execution_input_ddr_offset <=
+          execution_input_tensor_lookup_q[
+            execution_layer_lookup_qq.bank].ddr_offset;
+        execution_input_allocation_size <=
+          execution_input_tensor_lookup_q[
+            execution_layer_lookup_qq.bank].allocation_size;
+        execution_input_row_stride <=
+          execution_input_tensor_lookup_q[
+            execution_layer_lookup_qq.bank].row_stride;
+        execution_input_pixel_stride <=
+          execution_input_tensor_lookup_q[
+            execution_layer_lookup_qq.bank].pixel_stride;
+        execution_input_channel_stride <=
+          execution_input_tensor_lookup_q[
+            execution_layer_lookup_qq.bank].channel_stride;
+        execution_output_ddr_offset <=
+          execution_output_tensor_lookup_q[
+            execution_layer_lookup_qq.bank].ddr_offset;
+        execution_output_allocation_size <=
+          execution_output_tensor_lookup_q[
+            execution_layer_lookup_qq.bank].allocation_size;
+        execution_output_row_stride <=
+          execution_output_tensor_lookup_q[
+            execution_layer_lookup_qq.bank].row_stride;
+        execution_output_pixel_stride <=
+          execution_output_tensor_lookup_q[
+            execution_layer_lookup_qq.bank].pixel_stride;
+        execution_output_channel_stride <=
+          execution_output_tensor_lookup_q[
+            execution_layer_lookup_qq.bank].channel_stride;
+        execution_descriptor_valid <= 1'b1;
       end
     end
   end
@@ -334,26 +461,43 @@ module cnn_model_metadata_store #(
       (int'(metadata_record_index) * QUANT_WORDS) + int'(metadata_word_index));
   end
 
-  always_ff @(posedge clk) begin
-    header_read_address_q <= header_address_value;
-    layer_read_address_q <= layer_address_value;
-    tensor_read_address_q <= tensor_address_value;
-    quant_read_address_q <= quant_address_value;
-    metadata_read_kind_q <= metadata_kind;
-    metadata_read_kind_qq <= metadata_read_kind_q;
-    metadata_read_valid_q <= metadata_address_valid;
-    metadata_read_valid_qq <= metadata_read_valid_q;
+  always_ff @(posedge clk or negedge resetn) begin
+    if (!resetn) begin
+      header_read_address_q <= '0;
+      layer_read_address_q <= '0;
+      tensor_read_address_q <= '0;
+      quant_read_address_q <= '0;
+      metadata_read_kind_q <= '0;
+      metadata_read_kind_qq <= '0;
+      metadata_read_valid_q <= 1'b0;
+      metadata_read_valid_qq <= 1'b0;
+      metadata_write_q <= 1'b0;
+      metadata_write_kind_q <= '0;
+      metadata_write_data_q <= '0;
+    end else begin
+      header_read_address_q <= header_address_value;
+      layer_read_address_q <= layer_address_value;
+      tensor_read_address_q <= tensor_address_value;
+      quant_read_address_q <= quant_address_value;
+      metadata_read_kind_q <= metadata_kind;
+      metadata_read_kind_qq <= metadata_read_kind_q;
+      metadata_read_valid_q <= metadata_address_valid;
+      metadata_read_valid_qq <= metadata_read_valid_q;
+      metadata_write_q <= metadata_write && metadata_address_valid &&
+                          (staging_state == MODEL_STAGING_LOADING);
+      metadata_write_kind_q <= metadata_kind;
+      metadata_write_data_q <= metadata_write_data;
+    end
   end
 
   cnn_metadata_word_ram #(
     .DEPTH(HEADER_DEPTH)
   ) u_header_memory (
     .clk(clk),
-    .write_enable(metadata_write && metadata_address_valid &&
-                  (staging_state == MODEL_STAGING_LOADING) &&
-                  (metadata_kind == METADATA_HEADER)),
-    .write_address(header_address_value),
-    .write_data(metadata_write_data),
+    .write_enable(metadata_write_q &&
+                  (metadata_write_kind_q == METADATA_HEADER)),
+    .write_address(header_read_address_q),
+    .write_data(metadata_write_data_q),
     .read_address(header_read_address_q),
     .read_data(header_read_data)
   );
@@ -362,11 +506,10 @@ module cnn_model_metadata_store #(
     .DEPTH(LAYER_DEPTH)
   ) u_layer_memory (
     .clk(clk),
-    .write_enable(metadata_write && metadata_address_valid &&
-                  (staging_state == MODEL_STAGING_LOADING) &&
-                  (metadata_kind == METADATA_LAYER)),
-    .write_address(layer_address_value),
-    .write_data(metadata_write_data),
+    .write_enable(metadata_write_q &&
+                  (metadata_write_kind_q == METADATA_LAYER)),
+    .write_address(layer_read_address_q),
+    .write_data(metadata_write_data_q),
     .read_address(layer_read_address_q),
     .read_data(layer_read_data)
   );
@@ -375,11 +518,10 @@ module cnn_model_metadata_store #(
     .DEPTH(TENSOR_DEPTH)
   ) u_tensor_memory (
     .clk(clk),
-    .write_enable(metadata_write && metadata_address_valid &&
-                  (staging_state == MODEL_STAGING_LOADING) &&
-                  (metadata_kind == METADATA_TENSOR)),
-    .write_address(tensor_address_value),
-    .write_data(metadata_write_data),
+    .write_enable(metadata_write_q &&
+                  (metadata_write_kind_q == METADATA_TENSOR)),
+    .write_address(tensor_read_address_q),
+    .write_data(metadata_write_data_q),
     .read_address(tensor_read_address_q),
     .read_data(tensor_read_data)
   );
@@ -388,11 +530,10 @@ module cnn_model_metadata_store #(
     .DEPTH(QUANT_DEPTH)
   ) u_quant_memory (
     .clk(clk),
-    .write_enable(metadata_write && metadata_address_valid &&
-                  (staging_state == MODEL_STAGING_LOADING) &&
-                  (metadata_kind == METADATA_QUANTIZATION)),
-    .write_address(quant_address_value),
-    .write_data(metadata_write_data),
+    .write_enable(metadata_write_q &&
+                  (metadata_write_kind_q == METADATA_QUANTIZATION)),
+    .write_address(quant_read_address_q),
+    .write_data(metadata_write_data_q),
     .read_address(quant_read_address_q),
     .read_data(quant_read_data)
   );

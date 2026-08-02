@@ -51,6 +51,11 @@ streams with both `TKEEP` and `TLAST`. `TKEEP` is mandatory because packed INT8
 payloads may end with one, two, or three valid bytes. The fixed-network wrapper
 does not expose `TKEEP` and cannot carry this protocol without adaptation.
 
+The production Zybo block design instantiates this wrapper directly. A
+three-input interrupt concatenator maps the programmable runtime, DMA MM2S, and
+DMA S2MM interrupt outputs onto `IRQ_F2P[2:0]`, respectively. Software must
+service and acknowledge each source independently.
+
 ## Verification
 
 `tb_programmable_system_top` performs every metadata write and model command

@@ -511,8 +511,10 @@ module tb_single_layer_scheduler;
  @(posedge clk);
 
  run_case("full_image_1x1_cin3_cout5", 1, 4, 3, 4, 3, 1, 0, 3, 5);
+ run_case("strided_image_1x1_cin3_cout5", 1, 5, 5, 3, 3, 2, 0, 3, 5);
  run_case("full_image_3x3_cin7_cout13", 3, 5, 4, 5, 4, 1, 1, 7, 13);
  run_scratchpad_case("scratchpad_full_image_1x1_cin3_cout5", 1, 4, 3, 4, 3, 1, 0, 3, 5);
+ run_scratchpad_case("scratchpad_strided_image_1x1_cin3_cout5", 1, 5, 5, 3, 3, 2, 0, 3, 5);
  run_scratchpad_case("scratchpad_full_image_3x3_cin7_cout13", 3, 5, 4, 5, 4, 1, 1, 7, 13);
 
  $display("[PASS] tb_single_layer_scheduler tests=%0d", tests);

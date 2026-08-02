@@ -22,6 +22,7 @@ verilator --binary --timing \
  --top-module tb_packed_dma_runtime_router \
  rtl/include/cnn_dma_packet_pkg.sv \
  rtl/tensor/weight_scratchpad.sv \
+ rtl/tensor/banked_weight_scratchpad.sv \
  rtl/tensor/ping_pong_weight_scratchpad.sv \
  rtl/stream/packed_dma_packet_parser.sv \
  rtl/stream/packed_dma_runtime_router.sv \

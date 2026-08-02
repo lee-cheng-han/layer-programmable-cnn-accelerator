@@ -79,7 +79,9 @@ module single_layer_scheduler #(
 
   logic [DIM_W-1:0] out_x;
   logic [DIM_W-1:0] out_y;
-  logic [31:0] input_pixel_index_1x1;
+  logic [31:0] input_pixel_index_1x1_q;
+  logic [31:0] input_row_base_1x1_q;
+  logic [31:0] input_row_step_1x1;
   logic [31:0] output_pixel_index_calc;
 
   logic start_1x1;
@@ -114,8 +116,6 @@ module single_layer_scheduler #(
   assign busy = (state != S_IDLE) && (state != S_DONE);
   assign start_1x1 = (state == S_START_PIXEL) && (kernel_size == 2'd1);
   assign start_3x3 = (state == S_START_PIXEL) && (kernel_size == 2'd3);
-  assign input_pixel_index_1x1 = ((out_y * DIM_W'(stride)) * input_width) +
-                                 (out_x * DIM_W'(stride));
   assign output_pixel_index_calc =
     (ADDR_W'(out_y) * ADDR_W'(output_width)) + ADDR_W'(out_x);
   assign scratch_activation_read_pixel =
@@ -151,6 +151,14 @@ module single_layer_scheduler #(
     ((out_y + DIM_W'(1)) >= output_height);
 
   always_comb begin
+    case (stride)
+      2'd1: input_row_step_1x1 = 32'(input_width);
+      2'd2: input_row_step_1x1 = 32'(input_width) << 1;
+      default: input_row_step_1x1 = '0;
+    endcase
+  end
+
+  always_comb begin
     for (int co = 0; co < MAX_COUT; co++) begin
       output_pixel_data[co] = (kernel_size == 2'd1) ? output_1x1[co] : output_3x3[co];
     end
@@ -158,8 +166,9 @@ module single_layer_scheduler #(
 
   always_comb begin
     for (int ci = 0; ci < MAX_CIN; ci++) begin
-      if ((ci < cin) && (input_pixel_index_1x1 < 32'(MAX_PIXELS))) begin
-        activation_1x1[ci] = activation[(input_pixel_index_1x1 * 32'(MAX_CIN)) + 32'(ci)];
+      if ((ci < cin) && (input_pixel_index_1x1_q < 32'(MAX_PIXELS))) begin
+        activation_1x1[ci] =
+          activation[(input_pixel_index_1x1_q * 32'(MAX_CIN)) + 32'(ci)];
       end else begin
         activation_1x1[ci] = '0;
       end
@@ -193,7 +202,7 @@ module single_layer_scheduler #(
     .bias(bias),
     .use_scratchpad_operands(use_scratchpad_operands),
     .use_scratchpad_weights(use_scratchpad_weights),
-    .scratch_activation_pixel(input_pixel_index_1x1),
+    .scratch_activation_pixel(input_pixel_index_1x1_q),
     .scratch_activation_read_pixel(scratch_activation_read_pixel_1x1),
     .scratch_activation_read_c_base(scratch_activation_read_c_base_1x1),
     .scratch_activation_lane_mask(scratch_activation_lane_mask_1x1),
@@ -264,6 +273,8 @@ module single_layer_scheduler #(
       state <= S_IDLE;
       out_x <= '0;
       out_y <= '0;
+      input_pixel_index_1x1_q <= '0;
+      input_row_base_1x1_q <= '0;
       done  <= 1'b0;
 
       if (MIRROR_OUTPUT_TENSOR) begin
@@ -279,6 +290,8 @@ module single_layer_scheduler #(
           if (start) begin
             out_x <= '0;
             out_y <= '0;
+            input_pixel_index_1x1_q <= '0;
+            input_row_base_1x1_q <= '0;
             state <= ((output_width == '0) || (output_height == '0) || (cout == '0)) ?
                      S_DONE : S_START_PIXEL;
           end
@@ -316,10 +329,13 @@ module single_layer_scheduler #(
         S_NEXT_PIXEL: begin
           if ((out_x + DIM_W'(1)) < output_width) begin
             out_x <= out_x + DIM_W'(1);
+            input_pixel_index_1x1_q <= input_pixel_index_1x1_q + 32'(stride);
             state <= S_START_PIXEL;
           end else if ((out_y + DIM_W'(1)) < output_height) begin
             out_x <= '0;
             out_y <= out_y + DIM_W'(1);
+            input_row_base_1x1_q <= input_row_base_1x1_q + input_row_step_1x1;
+            input_pixel_index_1x1_q <= input_row_base_1x1_q + input_row_step_1x1;
             state <= S_START_PIXEL;
           end else begin
             state <= S_DONE;

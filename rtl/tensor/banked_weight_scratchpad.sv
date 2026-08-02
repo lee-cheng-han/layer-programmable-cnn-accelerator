@@ -90,8 +90,7 @@ module banked_weight_scratchpad #(
           in_lane_mask[pc] &&
           (out_channel < COUNT_W'(MAX_COUT)) &&
           (in_channel < COUNT_W'(MAX_CIN)) &&
-          (read_kernel_idx < 4'd9) &&
-          (lane_read_addr[pk][pc] < ADDR_W'(DEPTH));
+          (read_kernel_idx < 4'd9);
       end
     end
   end

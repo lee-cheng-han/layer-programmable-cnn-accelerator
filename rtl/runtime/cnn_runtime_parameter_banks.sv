@@ -72,8 +72,13 @@ module cnn_runtime_parameter_banks #(
   localparam logic [7:0] PARAMETER_NO_FREE_BANK = 8'd4;
   localparam logic [7:0] PARAMETER_BAD_OWNERSHIP = 8'd5;
 
-  typedef enum logic [2:0] {
+  typedef enum logic [3:0] {
     S_IDLE,
+    S_CHECK_CONFIG,
+    S_CALCULATE_LENGTH,
+    S_CHECK_LENGTH,
+    S_PREPARE,
+    S_CLEAR_BIASES,
     S_LOAD_WEIGHTS,
     S_LOAD_BIASES,
     S_VERIFY
@@ -86,10 +91,10 @@ module cnn_runtime_parameter_banks #(
   logic matching_bank_valid;
   logic matching_bank;
   logic layer_already_buffered;
-  logic load_config_valid;
-  logic [31:0] calculated_weight_bytes;
-  logic [31:0] calculated_bias_bytes;
-  logic [3:0] kernel_taps;
+  logic basic_config_valid;
+  logic [15:0] channel_product_q;
+  logic [31:0] calculated_weight_bytes_q;
+  logic [31:0] calculated_bias_bytes_q;
 
   logic [2:0] bank_layer_id [0:1];
   logic bank_quant_enable [0:1];
@@ -101,6 +106,8 @@ module cnn_runtime_parameter_banks #(
   logic [COUNT_W-1:0] load_cin_q;
   logic [COUNT_W-1:0] load_cout_q;
   logic load_bias_enable_q;
+  logic load_quant_enable_q;
+  logic [4:0] load_quant_shift_q;
   logic [15:0] expected_weight_bytes_q;
   logic [15:0] expected_bias_bytes_q;
   logic [31:0] expected_crc32_q;
@@ -147,26 +154,18 @@ module cnn_runtime_parameter_banks #(
     end
   endfunction
 
-  assign kernel_taps = (load_kernel_size == 2'd1) ? 4'd1 : 4'd9;
-  assign calculated_weight_bytes =
-    32'(load_cin) * 32'(load_cout) * 32'(kernel_taps);
-  assign calculated_bias_bytes = load_bias_enable ? (32'(load_cout) * 32'd4) : 32'd0;
-  assign load_config_valid =
-    ((load_kernel_size == 2'd1) || (load_kernel_size == 2'd3)) &&
-    (load_cin != 0) && (load_cin <= COUNT_W'(MAX_CIN)) &&
-    (load_cout != 0) && (load_cout <= COUNT_W'(MAX_COUT)) &&
-    (32'(load_weight_bytes) == calculated_weight_bytes) &&
-    (32'(load_bias_bytes) == calculated_bias_bytes) &&
-    (32'(load_weight_bytes) <= 32'(WEIGHT_BANK_CAPACITY_BYTES)) &&
-    (32'(load_bias_bytes) <= 32'(POSTPROCESS_BANK_CAPACITY_BYTES));
+  assign basic_config_valid =
+    ((load_kernel_size_q == 2'd1) || (load_kernel_size_q == 2'd3)) &&
+    (load_cin_q != 0) && (load_cin_q <= COUNT_W'(MAX_CIN)) &&
+    (load_cout_q != 0) && (load_cout_q <= COUNT_W'(MAX_COUT));
 
   assign bank0_free = !bank_valid[0] && !(compute_active && !compute_bank);
   assign bank1_free = !bank_valid[1] && !(compute_active && compute_bank);
   assign selected_free_bank = bank0_free ? 1'b0 : 1'b1;
   assign load_ready = (load_state == S_IDLE) && (bank0_free || bank1_free);
   assign layer_already_buffered =
-    (bank_valid[0] && (bank_layer_id[0] == load_layer_id)) ||
-    (bank_valid[1] && (bank_layer_id[1] == load_layer_id));
+    (bank_valid[0] && (bank_layer_id[0] == load_layer_id_q)) ||
+    (bank_valid[1] && (bank_layer_id[1] == load_layer_id_q));
   assign load_busy = load_state != S_IDLE;
   assign weight_ready = load_state == S_LOAD_WEIGHTS;
   assign bias_ready = load_state == S_LOAD_BIASES;
@@ -251,9 +250,14 @@ module cnn_runtime_parameter_banks #(
       load_cin_q <= '0;
       load_cout_q <= '0;
       load_bias_enable_q <= 1'b0;
+      load_quant_enable_q <= 1'b0;
+      load_quant_shift_q <= '0;
       expected_weight_bytes_q <= '0;
       expected_bias_bytes_q <= '0;
       expected_crc32_q <= '0;
+      channel_product_q <= '0;
+      calculated_weight_bytes_q <= '0;
+      calculated_bias_bytes_q <= '0;
       weight_count <= '0;
       bias_count <= '0;
       write_out_channel <= '0;
@@ -304,12 +308,6 @@ module cnn_runtime_parameter_banks #(
               error <= 1'b1;
               error_code <= PARAMETER_NO_FREE_BANK;
               load_done <= 1'b1;
-            end else if (!load_config_valid || layer_already_buffered) begin
-              error <= 1'b1;
-              error_code <= ((32'(load_weight_bytes) != calculated_weight_bytes) ||
-                             (32'(load_bias_bytes) != calculated_bias_bytes)) ?
-                            PARAMETER_BAD_LENGTH : PARAMETER_BAD_CONFIG;
-              load_done <= 1'b1;
             end else begin
               load_bank <= selected_free_bank;
               load_layer_id_q <= load_layer_id;
@@ -317,24 +315,82 @@ module cnn_runtime_parameter_banks #(
               load_cin_q <= load_cin;
               load_cout_q <= load_cout;
               load_bias_enable_q <= load_bias_enable;
+              load_quant_enable_q <= load_quant_enable;
+              load_quant_shift_q <= load_quant_shift;
               expected_weight_bytes_q <= load_weight_bytes;
               expected_bias_bytes_q <= load_bias_bytes;
               expected_crc32_q <= load_expected_crc32;
-              weight_count <= '0;
-              bias_count <= '0;
-              write_out_channel <= '0;
-              write_in_channel <= '0;
-              write_kernel_idx <= '0;
-              write_bias_channel <= '0;
-              crc_q <= 32'hFFFF_FFFF;
-              bank_valid[selected_free_bank] <= 1'b0;
-              bank_quant_enable[selected_free_bank] <= load_quant_enable;
-              bank_quant_shift[selected_free_bank] <= load_quant_shift;
-              for (int channel = 0; channel < MAX_COUT; channel++) begin
-                bias_bank[selected_free_bank][channel] <= '0;
-              end
-              load_state <= S_LOAD_WEIGHTS;
+              load_state <= S_CHECK_CONFIG;
             end
+          end
+        end
+
+        S_CHECK_CONFIG: begin
+          if (!basic_config_valid || layer_already_buffered) begin
+            error <= 1'b1;
+            error_code <= PARAMETER_BAD_CONFIG;
+            load_done <= 1'b1;
+            load_state <= S_IDLE;
+          end else begin
+            channel_product_q <=
+              16'(load_cin_q) * 16'(load_cout_q);
+            calculated_bias_bytes_q <=
+              load_bias_enable_q ? (32'(load_cout_q) << 2) : 32'd0;
+            load_state <= S_CALCULATE_LENGTH;
+          end
+        end
+
+        S_CALCULATE_LENGTH: begin
+          calculated_weight_bytes_q <=
+            (load_kernel_size_q == 2'd1) ?
+            32'(channel_product_q) :
+            ((32'(channel_product_q) << 3) + 32'(channel_product_q));
+          load_state <= S_CHECK_LENGTH;
+        end
+
+        S_CHECK_LENGTH: begin
+          if ((32'(expected_weight_bytes_q) !=
+               calculated_weight_bytes_q) ||
+              (32'(expected_bias_bytes_q) !=
+               calculated_bias_bytes_q)) begin
+            error <= 1'b1;
+            error_code <= PARAMETER_BAD_LENGTH;
+            load_done <= 1'b1;
+            load_state <= S_IDLE;
+          end else if ((32'(expected_weight_bytes_q) >
+                       32'(WEIGHT_BANK_CAPACITY_BYTES)) ||
+                      (32'(expected_bias_bytes_q) >
+                       32'(POSTPROCESS_BANK_CAPACITY_BYTES))) begin
+            error <= 1'b1;
+            error_code <= PARAMETER_BAD_CONFIG;
+            load_done <= 1'b1;
+            load_state <= S_IDLE;
+          end else begin
+            load_state <= S_PREPARE;
+          end
+        end
+
+        S_PREPARE: begin
+          weight_count <= '0;
+          bias_count <= '0;
+          write_out_channel <= '0;
+          write_in_channel <= '0;
+          write_kernel_idx <= '0;
+          write_bias_channel <= '0;
+          crc_q <= 32'hFFFF_FFFF;
+          bank_valid[load_bank] <= 1'b0;
+          bank_quant_enable[load_bank] <= load_quant_enable_q;
+          bank_quant_shift[load_bank] <= load_quant_shift_q;
+          load_state <= S_CLEAR_BIASES;
+        end
+
+        S_CLEAR_BIASES: begin
+          bias_bank[load_bank][int'(write_bias_channel)] <= '0;
+          if (write_bias_channel + COUNT_W'(1) >= load_cout_q) begin
+            write_bias_channel <= '0;
+            load_state <= S_LOAD_WEIGHTS;
+          end else begin
+            write_bias_channel <= write_bias_channel + COUNT_W'(1);
           end
         end
 

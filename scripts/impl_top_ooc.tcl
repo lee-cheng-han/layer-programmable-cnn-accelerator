@@ -18,6 +18,9 @@ set post_route_phys_directive "AggressiveExplore"
 if {[info exists ::env(PC)]} {
  set pc $::env(PC)
 }
+if {[info exists ::env(TOP_NAME)]} {
+ set top_name $::env(TOP_NAME)
+}
 if {[info exists ::env(PK)]} {
  set pk $::env(PK)
 }
@@ -167,22 +170,30 @@ foreach source $sources {
 
 read_xdc constraints/top_ooc.xdc
 
-synth_design \
+set synth_args [list \
  -top $top_name \
  -part $part_name \
  -generic PC=$pc \
  -generic PK=$pk \
  -generic MAX_CIN=$max_cin \
  -generic MAX_COUT=$max_cout \
- -generic MAX_PIXELS=$max_pixels \
  -mode out_of_context \
- -flatten_hierarchy none
+ -flatten_hierarchy none]
+if {$top_name eq "cnn_image2image_system_top"} {
+ lappend synth_args -generic MAX_PIXELS=$max_pixels
+}
+synth_design {*}$synth_args
 
 report_clocks -file "$out_dir/clocks_post_synth.rpt"
 report_utilization -file "$out_dir/utilization_post_synth.rpt"
 report_utilization -hierarchical -file "$out_dir/utilization_hier_post_synth.rpt"
 report_timing_summary -delay_type max -file "$out_dir/timing_post_synth.rpt"
 write_checkpoint -force "$out_dir/top_synth.dcp"
+
+if {[info exists ::env(SYNTH_ONLY)] && $::env(SYNTH_ONLY) eq "1"} {
+ puts "Synthesis-only run complete. Reports: $out_dir"
+ exit
+}
 
 set overutil_messages [utilization_over_limit_messages "$out_dir/utilization_post_synth.rpt"]
 if {[llength $overutil_messages] > 0} {

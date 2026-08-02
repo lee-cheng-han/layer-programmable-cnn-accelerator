@@ -103,17 +103,13 @@ Input RGB tensor
 | `performance_counters` | Counts job, packet, compute, layer, transfer, and stall cycles |
 | AXI DMA | Moves tensor packets and output pixels between DDR and PL streams |
 
-The current board path uses `stream_loaded_multi_layer_job_controller`. The
-parallel layer-programmable path connects the active view from
-`cnn_model_metadata_store` through `cnn_programmable_job_engine` to two runtime
-parameter banks and has eight-layer controller plus two-layer tiled golden RTL
-evidence. `cnn_programmable_system_top` now closes those standalone blocks
-into one AXI-Lite-controlled model-to-output data path and has a `TKEEP`-aware
-Vivado wrapper. It becomes the generated board path after the Zynq block design
-selects that wrapper and implementation closes; DDR gather/scatter software
-still remains.
-The generated board bitstream still uses the preserved fixed-network
-seven-packet path.
+The production board path now uses `cnn_programmable_system_top`. It connects
+the atomically active metadata view through `cnn_programmable_job_engine` to
+two runtime parameter banks and the tiled multi-layer runtime. The generated
+Zybo block design selects its `TKEEP`-aware wrapper and routes the CNN and both
+DMA interrupts to the PS. Implementation closure and DDR gather/scatter
+software still remain; the fixed seven-packet path is retained only as a
+regression baseline during the transition.
 
 ## Register Map
 

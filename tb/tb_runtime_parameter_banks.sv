@@ -259,6 +259,13 @@ module tb_runtime_parameter_banks;
     end
   endtask
 
+  task automatic wait_for_weight_read;
+    begin
+      repeat (2) @(posedge clk);
+      #1;
+    end
+  endtask
+
   initial begin
     checks = 0;
     errors = 0;
@@ -304,14 +311,14 @@ module tb_runtime_parameter_banks;
     check_value("layer 0 bias", int'(parameter_bias[0]), 3);
     check_value("layer 0 quant enable", int'(parameter_quant_enable), 1);
     check_value("layer 0 quant shift", int'(parameter_quant_shift), 1);
-    #1;
+    wait_for_weight_read();
     check_value("layer 0 weight", int'($signed(weight_mat_data[0][0])), 2);
     release_layer();
 
     acquire_layer(1);
     check_value("layer 1 compute bank", int'(compute_bank), 1);
     weight_read_kernel_idx = 4'd4;
-    #1;
+    wait_for_weight_read();
     check_value("layer 1 center weight", int'($signed(weight_mat_data[0][0])), 1);
 
     fork
@@ -330,7 +337,7 @@ module tb_runtime_parameter_banks;
     weight_read_kernel_idx = 4'd0;
     acquire_layer(2);
     check_value("prefetched compute bank", int'(compute_bank), 0);
-    #1;
+    wait_for_weight_read();
     check_value("prefetched layer weight", int'($signed(weight_mat_data[0][0])), 4);
     release_layer();
 
@@ -353,6 +360,8 @@ module tb_runtime_parameter_banks;
     load_start = 1'b1;
     @(negedge clk);
     load_start = 1'b0;
+    wait (load_done);
+    #1;
     check_value("length failure asserted", int'(error), 1);
     check_value("length failure code", int'(error_code), 2);
 

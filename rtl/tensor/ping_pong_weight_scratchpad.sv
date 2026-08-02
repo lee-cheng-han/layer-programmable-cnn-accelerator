@@ -6,7 +6,8 @@ module ping_pong_weight_scratchpad #(
   parameter int MAX_CIN  = 64,
   parameter int MAX_COUT = 64,
   parameter int DATA_W   = 8,
-  parameter int COUNT_W  = 8
+  parameter int COUNT_W  = 8,
+  parameter int ADDR_W   = 32
 )(
   input  logic clk,
 
@@ -37,13 +38,14 @@ module ping_pong_weight_scratchpad #(
   logic signed [DATA_W-1:0] bank0_debug_data;
   logic signed [DATA_W-1:0] bank1_debug_data;
 
-  weight_scratchpad #(
+  banked_weight_scratchpad #(
     .PC(PC),
     .PK(PK),
     .MAX_CIN(MAX_CIN),
     .MAX_COUT(MAX_COUT),
     .DATA_W(DATA_W),
-    .COUNT_W(COUNT_W)
+    .COUNT_W(COUNT_W),
+    .ADDR_W(ADDR_W)
   ) u_bank0 (
     .clk(clk),
     .write_enable(write_enable && (write_bank == 1'b0)),
@@ -63,13 +65,14 @@ module ping_pong_weight_scratchpad #(
     .debug_read_data(bank0_debug_data)
   );
 
-  weight_scratchpad #(
+  banked_weight_scratchpad #(
     .PC(PC),
     .PK(PK),
     .MAX_CIN(MAX_CIN),
     .MAX_COUT(MAX_COUT),
     .DATA_W(DATA_W),
-    .COUNT_W(COUNT_W)
+    .COUNT_W(COUNT_W),
+    .ADDR_W(ADDR_W)
   ) u_bank1 (
     .clk(clk),
     .write_enable(write_enable && (write_bank == 1'b1)),
