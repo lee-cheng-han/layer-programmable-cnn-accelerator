@@ -62,6 +62,7 @@ module cnn_programmable_runtime_top #(
   output logic [15:0] current_tile_y,
   output logic [31:0] completed_layer_count,
   output logic [31:0] completed_tile_count,
+  output logic [31:0] saturation_event_count,
   output logic layer_done,
   output logic busy,
   output logic done,
@@ -115,6 +116,19 @@ module cnn_programmable_runtime_top #(
   logic [31:0] descriptor_output_row_stride;
   logic [31:0] descriptor_output_pixel_stride;
   logic [31:0] descriptor_output_channel_stride;
+  logic [15:0] descriptor_output_tensor_quantization_id;
+  logic descriptor_residual_tensor_valid;
+  logic [15:0] descriptor_residual_width;
+  logic [15:0] descriptor_residual_height;
+  logic [15:0] descriptor_residual_channels;
+  logic [15:0] descriptor_residual_quantization_id;
+  logic [63:0] descriptor_residual_ddr_offset;
+  logic descriptor_quantization_valid;
+  logic [15:0] descriptor_quantization_channel_count;
+  logic [7:0] descriptor_rounding_mode;
+  logic signed [7:0] descriptor_output_zero_point;
+  logic signed [31:0] descriptor_quant_multiplier [MAX_COUT];
+  logic [5:0] descriptor_quant_shift [MAX_COUT];
 
   logic packet_start;
   logic packet_ready;
@@ -245,7 +259,8 @@ module cnn_programmable_runtime_top #(
   cnn_model_metadata_store #(
     .MAX_LAYERS(MAX_LAYERS),
     .MAX_TENSORS(MAX_TENSORS),
-    .MAX_QUANTIZATIONS(MAX_QUANTIZATIONS)
+    .MAX_QUANTIZATIONS(MAX_QUANTIZATIONS),
+    .MAX_CHANNELS(MAX_COUT)
   ) u_metadata (
     .clk(clk),
     .resetn(rst_n),
@@ -306,6 +321,22 @@ module cnn_programmable_runtime_top #(
     .execution_output_row_stride(descriptor_output_row_stride),
     .execution_output_pixel_stride(descriptor_output_pixel_stride),
     .execution_output_channel_stride(descriptor_output_channel_stride),
+    .execution_output_tensor_quantization_id(
+      descriptor_output_tensor_quantization_id),
+    .execution_residual_tensor_valid(descriptor_residual_tensor_valid),
+    .execution_residual_width(descriptor_residual_width),
+    .execution_residual_height(descriptor_residual_height),
+    .execution_residual_channels(descriptor_residual_channels),
+    .execution_residual_quantization_id(
+      descriptor_residual_quantization_id),
+    .execution_residual_ddr_offset(descriptor_residual_ddr_offset),
+    .execution_quantization_valid(descriptor_quantization_valid),
+    .execution_quantization_channel_count(
+      descriptor_quantization_channel_count),
+    .execution_rounding_mode(descriptor_rounding_mode),
+    .execution_output_zero_point(descriptor_output_zero_point),
+    .execution_quant_multiplier(descriptor_quant_multiplier),
+    .execution_quant_shift(descriptor_quant_shift),
     .staging_state(staging_state),
     .staging_bank(),
     .active_valid(model_active_valid),
@@ -468,6 +499,7 @@ module cnn_programmable_runtime_top #(
     .descriptor_input_tensor_id(descriptor_input_tensor_id),
     .descriptor_output_tensor_id(descriptor_output_tensor_id),
     .descriptor_residual_tensor_id(descriptor_residual_tensor_id),
+    .descriptor_quantization_id(descriptor_quantization_id),
     .descriptor_input_width(descriptor_input_width),
     .descriptor_input_height(descriptor_input_height),
     .descriptor_input_channels(descriptor_input_channels),
@@ -498,6 +530,22 @@ module cnn_programmable_runtime_top #(
     .descriptor_output_row_stride(descriptor_output_row_stride),
     .descriptor_output_pixel_stride(descriptor_output_pixel_stride),
     .descriptor_output_channel_stride(descriptor_output_channel_stride),
+    .descriptor_output_tensor_quantization_id(
+      descriptor_output_tensor_quantization_id),
+    .descriptor_residual_tensor_valid(descriptor_residual_tensor_valid),
+    .descriptor_residual_width(descriptor_residual_width),
+    .descriptor_residual_height(descriptor_residual_height),
+    .descriptor_residual_channels(descriptor_residual_channels),
+    .descriptor_residual_quantization_id(
+      descriptor_residual_quantization_id),
+    .descriptor_residual_ddr_offset(descriptor_residual_ddr_offset),
+    .descriptor_quantization_valid(descriptor_quantization_valid),
+    .descriptor_quantization_channel_count(
+      descriptor_quantization_channel_count),
+    .descriptor_rounding_mode(descriptor_rounding_mode),
+    .descriptor_output_zero_point(descriptor_output_zero_point),
+    .descriptor_quant_multiplier(descriptor_quant_multiplier),
+    .descriptor_quant_shift(descriptor_quant_shift),
     .parameter_request(parameter_request),
     .parameter_layer_id(parameter_layer_id),
     .parameter_ready(parameter_ready),
@@ -543,6 +591,7 @@ module cnn_programmable_runtime_top #(
     .current_tile_y(current_tile_y),
     .completed_layer_count(completed_layer_count),
     .completed_tile_count(completed_tile_count),
+    .saturation_event_count(saturation_event_count),
     .layer_done(layer_done), .busy(busy), .done(controller_done),
     .error(controller_error), .error_code(controller_error_code),
     .error_layer(error_layer)

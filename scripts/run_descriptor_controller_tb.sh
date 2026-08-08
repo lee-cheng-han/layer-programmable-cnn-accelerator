@@ -25,6 +25,7 @@ verilator --binary --timing \
  rtl/postprocess/parallel_bias_add.sv \
  rtl/postprocess/parallel_relu.sv \
  rtl/postprocess/parallel_quantizer.sv \
+ rtl/postprocess/parallel_requantizer.sv \
  rtl/postprocess/parallel_saturate.sv \
  rtl/compute/reduction_tree.sv \
  rtl/compute/parallel_mac_array.sv \

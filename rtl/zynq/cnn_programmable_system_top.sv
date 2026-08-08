@@ -78,6 +78,7 @@ module cnn_programmable_system_top #(
   logic [15:0] current_tile_y;
   logic [31:0] completed_layer_count;
   logic [31:0] completed_tile_count;
+  logic [31:0] saturation_event_count;
   logic layer_done;
   logic [7:0] error_code;
   logic [2:0] error_layer;
@@ -124,6 +125,7 @@ module cnn_programmable_system_top #(
     .current_tile_x(current_tile_x), .current_tile_y(current_tile_y),
     .completed_layer_count(completed_layer_count),
     .completed_tile_count(completed_tile_count),
+    .saturation_event_count(saturation_event_count),
     .layer_done(layer_done), .core_busy(busy), .core_done(done),
     .core_error(error), .core_error_code(error_code),
     .core_error_layer(error_layer),
@@ -171,6 +173,7 @@ module cnn_programmable_system_top #(
     .current_tile_x(current_tile_x), .current_tile_y(current_tile_y),
     .completed_layer_count(completed_layer_count),
     .completed_tile_count(completed_tile_count),
+    .saturation_event_count(saturation_event_count),
     .layer_done(layer_done), .busy(busy), .done(done), .error(error),
     .error_code(error_code), .error_layer(error_layer),
     .packet_error_count(packet_error_count),

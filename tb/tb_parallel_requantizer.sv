@@ -76,10 +76,13 @@ module tb_parallel_requantizer;
     acc_in[7] = -32'sd100; quant_multiplier[7] = 32'sd3; quant_shift[7] = 6'd1;
     repeat (2) @(posedge clk);
     rst_n = 1'b1;
+    @(negedge clk);
     valid_in = 1'b1;
     @(posedge clk);
-    #1;
+    @(negedge clk);
     valid_in = 1'b0;
+    @(posedge valid_out);
+    #1;
     if (!valid_out) $fatal(1, "[FAIL] missing valid_out");
 
     expect_lane(0, 0, 0, 0);
@@ -92,10 +95,13 @@ module tb_parallel_requantizer;
     expect_lane(7, -128, 0, 1);
 
     lane_mask[2] = 1'b0;
+    @(negedge clk);
     valid_in = 1'b1;
     @(posedge clk);
-    #1;
+    @(negedge clk);
     valid_in = 1'b0;
+    @(posedge valid_out);
+    #1;
     expect_lane(2, 0, 0, 0);
 
     $display("[PASS] tb_parallel_requantizer tests=%0d", tests);

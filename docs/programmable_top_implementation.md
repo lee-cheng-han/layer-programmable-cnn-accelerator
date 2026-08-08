@@ -17,7 +17,7 @@ validated by the separate board flow.
 | Maximum tile width / height | 16 / 16 |
 | Clock target | 125.000 MHz (8.000 ns) |
 | Vivado | 2025.2 |
-| Result stage | Post-route physical optimization |
+| Result stage | Routed |
 | Implementation status | Timing closed |
 
 ## Timing Signoff
@@ -27,25 +27,27 @@ Both satisfy setup and hold timing without failing endpoints.
 
 | Run | Place / route directive | WNS | TNS | Setup failures | WHS | THS | Hold failures |
 |---|---|---:|---:|---:|---:|---:|---:|
-| Default | Default / default | 0.087 ns | 0.000 ns | 0 | 0.086 ns | 0.000 ns | 0 |
-| Explore | Explore / Explore | 0.064 ns | 0.000 ns | 0 | 0.088 ns | 0.000 ns | 0 |
+| Default | Default / default | 0.023 ns | 0.000 ns | 0 | 0.096 ns | 0.000 ns | 0 |
+| Explore | Explore / Explore | 0.013 ns | 0.000 ns | 0 | 0.096 ns | 0.000 ns | 0 |
 
-Post-synthesis setup slack is 0.512 ns. The default run's worst setup path is
-a five-LUT BRAM-read-to-AXI-readback path. The Explore run's worst paths are
-routing-only metadata writes into the distributed active-model cache. The
-earlier deep arithmetic, DSP cascade, halo address, and tensor-selection paths
-are no longer critical.
+Post-synthesis setup is `WNS=-0.279 ns`, `TNS=-2.232 ns`, with eight estimated
+failing endpoints. Physical placement and routing close all endpoints in two
+independent searches. The default run's worst setup path crosses the residual
+tile serializer and packed output writer. The Explore run's worst path is a
+descriptor geometry check feeding the sticky runtime error register. The
+requantization multiplier, rounding, zero-point, parser byte accounting, and
+residual arithmetic paths are no longer critical.
 
 ## Utilization
 
 | Resource | Used | Available | Utilization |
 |---|---:|---:|---:|
-| Slice LUTs | 20,395 | 53,200 | 38.34% |
-| Slice registers | 30,786 | 106,400 | 28.93% |
-| F7 muxes | 4,098 | 26,600 | 15.41% |
-| F8 muxes | 800 | 13,300 | 6.02% |
-| Block RAM tiles | 38 | 140 | 27.14% |
-| DSPs | 20 | 220 | 9.09% |
+| Slice LUTs | 28,862 | 53,200 | 54.25% |
+| Slice registers | 38,994 | 106,400 | 36.65% |
+| F7 muxes | 4,855 | 26,600 | 18.25% |
+| F8 muxes | 1,098 | 13,300 | 8.26% |
+| Block RAM tiles | 43 | 140 | 30.71% |
+| DSPs | 54 | 220 | 24.55% |
 
 Both routed runs report no congestion windows above level 5. The OOC DRC and
 methodology reports retain expected advisories for the absent PS7 wrapper,
@@ -54,16 +56,17 @@ optional DSP/BRAM pipeline registers. These are not timing violations.
 
 ## Artifacts
 
-The Batch 25 evidence is under
-`build/timing_closure/batch25_geometry_tensor_lookup_pipeline/`:
+The current Phase 9 evidence is under:
 
-- `synth/top_synth.dcp` and post-synthesis timing/utilization reports
-- `physical/optimized.dcp` and default setup, hold, congestion, fanout, DRC,
-  methodology, and utilization reports
-- `physical_explore/optimized.dcp` and equivalent Explore-run reports
+- `build/programmable_top_synth_candidate/` for the synthesized checkpoint and
+  post-synthesis timing/utilization reports
+- `build/programmable_top_phase9_route_final/` for the default routed
+  checkpoint and setup, hold, congestion, fanout, DRC, and utilization reports
+- `build/programmable_top_phase9_route_explore/` for the independent
+  Explore/Explore routed checkpoint and equivalent reports
 
-The immediately preceding Batch 21 through Batch 24 directories preserve the
-root-cause progression and make the closure work auditable.
+These results include the integrated per-channel requantizer, residual
+scratchpad/load path, residual arithmetic, and saturation-event counters.
 
 ## Regeneration
 
@@ -72,12 +75,9 @@ make programmable-top-synth
 
 vivado -mode batch -source scripts/implement_checkpoint.tcl -tclargs \
   build/programmable_top_synth_candidate/top_synth.dcp \
-  build/timing_closure/recheck_default
+  build/programmable_top_phase9_route_final
 
 vivado -mode batch -source scripts/implement_checkpoint.tcl -tclargs \
   build/programmable_top_synth_candidate/top_synth.dcp \
-  build/timing_closure/recheck_explore Explore Explore
+  build/programmable_top_phase9_route_explore Explore Explore
 ```
-
-Run `scripts/optimize_routed_checkpoint.tcl` on each resulting `routed.dcp` to
-produce the final post-route setup and hold signoff reports.

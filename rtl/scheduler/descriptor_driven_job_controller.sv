@@ -88,6 +88,7 @@ module descriptor_driven_job_controller #(
 
   typedef enum logic [2:0] {
     S_IDLE,
+    S_WAIT_DESCRIPTOR,
     S_LATCH_DESCRIPTOR,
     S_WAIT_PARAMETER,
     S_START_LAYER,
@@ -141,6 +142,8 @@ module descriptor_driven_job_controller #(
   logic signed [DATA_W-1:0] scheduler_activation [MAX_PIXELS*MAX_CIN];
   logic signed [OUT_W-1:0] scheduler_output [MAX_PIXELS*MAX_COUT];
   logic signed [DATA_W-1:0] unused_scratch_activation [PC];
+  logic signed [31:0] legacy_quant_multiplier [MAX_COUT];
+  logic [5:0] legacy_quant_shift [MAX_COUT];
 
   assign descriptor_layer_index = layer_index;
   assign active_layer = layer_index;
@@ -251,6 +254,10 @@ module descriptor_driven_job_controller #(
     for (int lane = 0; lane < PC; lane++) begin
       unused_scratch_activation[lane] = '0;
     end
+    for (int channel = 0; channel < MAX_COUT; channel++) begin
+      legacy_quant_multiplier[channel] = 32'sd1;
+      legacy_quant_shift[channel] = '0;
+    end
   end
 
   function automatic logic signed [OUT_W-1:0] saturate_int8(
@@ -299,6 +306,10 @@ module descriptor_driven_job_controller #(
     .relu_enable(active_relu_enable),
     .quant_enable(active_quant_enable),
     .quant_shift(active_quant_shift),
+    .per_channel_quant_enable(1'b0),
+    .quant_multiplier(legacy_quant_multiplier),
+    .per_channel_quant_shift(legacy_quant_shift),
+    .output_zero_point(8'sd0),
     .activation(scheduler_activation),
     .weights_1x1(parameter_weights_1x1),
     .weights_3x3(parameter_weights_3x3),
@@ -322,6 +333,7 @@ module descriptor_driven_job_controller #(
     .output_pixel_channels(),
     .output_pixel_data(),
     .output_pixel_last(),
+    .output_pixel_saturation_count(),
     .current_x(),
     .current_y(),
     .busy(),
@@ -392,8 +404,15 @@ module descriptor_driven_job_controller #(
               state <= S_DONE;
             end else begin
               layer_count_q <= model_layer_count[3:0];
-              state <= S_LATCH_DESCRIPTOR;
+              state <= S_WAIT_DESCRIPTOR;
             end
+          end
+        end
+
+        S_WAIT_DESCRIPTOR: begin
+          if (descriptor_valid &&
+              (descriptor_layer_id == 16'(layer_index))) begin
+            state <= S_LATCH_DESCRIPTOR;
           end
         end
 
@@ -494,7 +513,7 @@ module descriptor_driven_job_controller #(
             state <= S_DONE;
           end else begin
             layer_index <= layer_index + 3'd1;
-            state <= S_LATCH_DESCRIPTOR;
+            state <= S_WAIT_DESCRIPTOR;
           end
         end
 

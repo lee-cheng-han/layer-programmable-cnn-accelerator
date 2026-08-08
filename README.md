@@ -93,14 +93,13 @@ Weights and biases remain packet-loaded for every job; software may replace
 the preset with trained INT8 parameters or another compatible filter bank
 without rebuilding the FPGA bitstream.
 
-### Layer-Programmable Direction
+### Layer-Programmable Runtime
 
-The fixed three-layer board design is the preserved implementation baseline for
-an in-progress layer-programmable architecture. The V1 model-package ABI is now
-frozen for networks with one to eight convolution layers, runtime 1x1/3x3
+The production PL architecture is descriptor-driven and layer-programmable;
+the fixed three-layer design remains only as a regression baseline. The V1
+model-package ABI supports one to eight convolution layers, runtime 1x1/3x3
 kernels, 1-16 channels, stride 1/2, per-edge padding, NHWC INT8 tensors, and
-dimensions up to 1024x1024 through planned DDR-backed spatial tiling. Freezing
-the ABI does not mean the current RTL already implements those runtime limits.
+dimensions up to 1024x1024 through DDR-backed spatial tiling.
 
 See the normative [V1 model-package ABI](docs/model_package_abi.md) and the
 [implementation roadmap](docs/layer_programmable_roadmap.md). The first
@@ -124,10 +123,12 @@ progress. Its two-layer packed-DMA golden flow and invalid-chain rejection
 pass. An integrated programmable runtime now connects atomic metadata,
 descriptor-derived parameter validation, packed ingress, reusable banks, tiled
 execution, and packed egress in one synthesizable top; its model-to-output
-golden flow passes. See [tiled execution](docs/tiled_execution.md). DDR
-gather/scatter software and board-facing implementation remain.
-The prioritized completion gates, including numeric integration, diagnostics,
-implementation closure, and final demonstration evidence, are tracked in the
+golden flow passes. Active quantization descriptors drive per-output-channel
+multiplier/shift/zero-point requantization with round-half-to-even, and the
+integrated final-layer residual path supports signed INT8 add/subtract with
+saturation-event readback. See [tiled execution](docs/tiled_execution.md). DDR
+gather/scatter software and final board-integrated regeneration remain. The
+prioritized completion gates are tracked in the
 [engineering completion plan](docs/layer_programmable_roadmap.md#engineering-completion-plan).
 
 The programmable path now also has a versioned
@@ -136,10 +137,10 @@ The programmable path now also has a versioned
 model lifecycle, metadata loading, parameter selection, job launch, and
 progress readback through AXI-Lite while tensors use packed AXI-Stream.
 
-The currently generated fixed-board control plane also exposes versioned
-[capability discovery and structured errors](docs/capability_and_errors.md).
-It advertises runtime metadata storage while continuing to identify itself as
-the fixed-network baseline and withholding complete runtime package support.
+The control plane also exposes versioned
+[capability discovery and structured errors](docs/capability_and_errors.md),
+model lifecycle state, tiled progress, packet errors, and numeric saturation
+events.
 
 ### Target Platform
 
@@ -188,11 +189,11 @@ experiment, not the board-integrated configuration. See
 [synthesis_experiments.md](docs/synthesis_experiments.md) for the complete
 configuration comparison.
 
-The layer-programmable PL top also closes two clean out-of-context physical
-searches at 125 MHz. The default run reports 0.087 ns setup and 0.086 ns hold
-slack; an independent Explore run reports 0.064 ns setup and 0.088 ns hold
-slack. Both have zero setup/hold failing endpoints and no congestion windows
-above level 5. See
+The layer-programmable PL top, including per-channel requantization and
+residual arithmetic, closes two out-of-context physical searches at 125 MHz.
+The default and Explore routes have 0.023 ns and 0.013 ns setup slack,
+respectively; both have 0.096 ns hold slack, zero failing endpoints, and no
+congestion windows above level 5. See
 [programmable_top_implementation.md](docs/programmable_top_implementation.md)
 for the configuration, utilization, critical paths, and reproducible flow.
 
@@ -417,17 +418,17 @@ record.
 
 - The implemented board configuration uses `PC=2`, `PK=4`, and
   `MAX_PIXELS=16`; larger configurations require a new implementation run.
-- Parameters are loaded for every job through AXI DMA rather than retained in
-  persistent on-chip model storage.
+- Model metadata is atomically activated in retained PL memories; layer
+  parameters are loaded from DDR into reusable active/prefetch banks.
 - `make baremetal-headers` regenerates the Gaussian default packet. Alternative
   parameters must preserve the synthesized `3 -> 16 -> 16 -> 3` tensor shapes
   and the documented packet order.
 - DMA completion is currently polled by software. Interrupt status exists in
   the register interface, but the application does not yet use interrupt-driven
   completion.
-- The current network topology is fixed to the three-layer RGB path; image
-  dimensions and residual mode are runtime configurable within synthesized
-  limits.
+- Runtime descriptors select one to eight 1x1/3x3 convolution layers, tensor
+  geometry, channel counts, activation, per-channel quantization, and optional
+  final residual add/subtract within the V1 capability limits.
 - Timing closure has 0.036 ns setup and 0.027 ns hold margin at 125 MHz, so any
   architectural or tool-version change requires timing to be re-qualified.
 

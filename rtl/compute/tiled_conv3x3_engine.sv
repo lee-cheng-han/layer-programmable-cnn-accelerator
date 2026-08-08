@@ -32,6 +32,10 @@ module tiled_conv3x3_engine #(
   input  logic relu_enable,
   input  logic quant_enable,
   input  logic [4:0] quant_shift,
+  input  logic per_channel_quant_enable,
+  input  logic signed [31:0] quant_multiplier [MAX_COUT],
+  input  logic [5:0] per_channel_quant_shift [MAX_COUT],
+  input  logic signed [7:0] output_zero_point,
 
   input  logic signed [DATA_W-1:0] activation [MAX_PIXELS*MAX_CIN],
   input  logic signed [DATA_W-1:0] weights [MAX_COUT][MAX_CIN][9],
@@ -51,6 +55,7 @@ module tiled_conv3x3_engine #(
   input  logic signed [DATA_W-1:0] scratch_weight_mat_data [PK][PC],
 
   output logic signed [OUT_W-1:0] output_data [MAX_COUT],
+  output logic [31:0] saturation_event_count,
   output logic busy,
   output logic done
 );
@@ -71,6 +76,7 @@ module tiled_conv3x3_engine #(
     S_POST_BIAS,
     S_POST_RELU,
     S_POSTPROCESS,
+    S_WAIT_REQUANT,
     S_WRITE_TILE,
     S_DONE
   } state_t;
@@ -135,11 +141,36 @@ module tiled_conv3x3_engine #(
   logic signed [ACC_W-1:0] relu_acc_vec_q [PK];
   logic signed [ACC_W-1:0] quant_acc_vec [PK];
   logic signed [OUT_W-1:0] post_out_vec [PK];
+  logic signed [OUT_W-1:0] requant_out_vec [PK];
   logic signed [OUT_W-1:0] post_out_vec_q [PK];
+  logic signed [31:0] requant_multiplier [PK];
+  logic [5:0] requant_shift [PK];
+  logic signed [7:0] requant_zero_point [PK];
+  logic [PK-1:0] requant_saturation_positive;
+  logic [PK-1:0] requant_saturation_negative;
+  logic requant_valid_out;
+  logic [31:0] requant_saturation_count;
 
   always_comb begin
     kernel_y = 2'(kernel_idx / 4'd3);
     kernel_x = 2'(kernel_idx - (kernel_y * 2'd3));
+  end
+
+  always_comb begin
+    requant_saturation_count = '0;
+    for (int pk = 0; pk < PK; pk++) begin
+      requant_saturation_count = requant_saturation_count +
+        32'(requant_saturation_positive[pk]) +
+        32'(requant_saturation_negative[pk]);
+    end
+  end
+
+  always_comb begin
+    for (int pk = 0; pk < PK; pk++) begin
+      requant_multiplier[pk] = quant_multiplier[int'(k_base) + pk];
+      requant_shift[pk] = per_channel_quant_shift[int'(k_base) + pk];
+      requant_zero_point[pk] = output_zero_point;
+    end
   end
 
   assign addr_in_x_calc =
@@ -296,6 +327,25 @@ module tiled_conv3x3_engine #(
     .out_vec(post_out_vec)
   );
 
+  parallel_requantizer #(
+    .PK(PK),
+    .ACC_W(ACC_W),
+    .OUT_W(OUT_W)
+  ) u_parallel_requantizer (
+    .clk(clk),
+    .rst_n(rst_n),
+    .valid_in((state == S_POSTPROCESS) && per_channel_quant_enable),
+    .acc_in(relu_acc_vec_q),
+    .quant_multiplier(requant_multiplier),
+    .quant_shift(requant_shift),
+    .output_zero_point(requant_zero_point),
+    .lane_mask(post_lane_mask_q),
+    .out_vec(requant_out_vec),
+    .saturation_positive(requant_saturation_positive),
+    .saturation_negative(requant_saturation_negative),
+    .valid_out(requant_valid_out)
+  );
+
   assign mac_valid_in    = (state == S_ISSUE);
   assign psum_clear      = (state == S_CLEAR);
   assign psum_accumulate = (state == S_WAIT_MAC) && mac_valid_out;
@@ -319,6 +369,7 @@ module tiled_conv3x3_engine #(
       quant_shift_q <= '0;
       post_lane_mask_q <= '0;
       done       <= 1'b0;
+      saturation_event_count <= '0;
       scratch_activation_read_pixel_q <= '0;
       scratch_activation_read_c_base_q <= '0;
       scratch_activation_lane_mask_q <= '0;
@@ -353,6 +404,7 @@ module tiled_conv3x3_engine #(
       case (state)
         S_IDLE: begin
           if (start) begin
+            saturation_event_count <= '0;
             c_base     <= '0;
             k_base     <= '0;
             kernel_idx <= 4'd0;
@@ -479,10 +531,25 @@ module tiled_conv3x3_engine #(
         end
 
         S_POSTPROCESS: begin
-          for (int pk = 0; pk < PK; pk++) begin
-            post_out_vec_q[pk] <= post_out_vec[pk];
+          if (per_channel_quant_enable) begin
+            state <= S_WAIT_REQUANT;
+          end else begin
+            for (int pk = 0; pk < PK; pk++) begin
+              post_out_vec_q[pk] <= post_out_vec[pk];
+            end
+            state <= S_WRITE_TILE;
           end
-          state <= S_WRITE_TILE;
+        end
+
+        S_WAIT_REQUANT: begin
+          if (requant_valid_out) begin
+            saturation_event_count <= saturation_event_count +
+              requant_saturation_count;
+            for (int pk = 0; pk < PK; pk++) begin
+              post_out_vec_q[pk] <= requant_out_vec[pk];
+            end
+            state <= S_WRITE_TILE;
+          end
         end
 
         S_WRITE_TILE: begin

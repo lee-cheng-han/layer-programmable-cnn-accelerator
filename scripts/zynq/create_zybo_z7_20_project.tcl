@@ -41,6 +41,7 @@ set rtl_files [list \
  rtl/postprocess/parallel_bias_add.sv \
  rtl/postprocess/parallel_relu.sv \
  rtl/postprocess/parallel_quantizer.sv \
+ rtl/postprocess/parallel_requantizer.sv \
  rtl/postprocess/parallel_saturate.sv \
  rtl/postprocess/residual_add.sv \
  rtl/tensor/tensor_address_gen.sv \

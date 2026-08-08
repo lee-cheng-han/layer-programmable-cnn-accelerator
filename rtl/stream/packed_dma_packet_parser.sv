@@ -50,7 +50,6 @@ module packed_dma_packet_parser #(
 
   state_t state;
   logic [2:0] header_word_index;
-  logic [31:0] payload_bytes_received;
   logic [31:0] payload_bytes_remaining;
   logic [2:0] expected_beat_bytes;
   logic [3:0] expected_keep;
@@ -67,7 +66,6 @@ module packed_dma_packet_parser #(
   logic payload_buffer_last;
   logic payload_buffer_transfer;
 
-  assign payload_bytes_remaining = payload_length - payload_bytes_received;
   assign expected_beat_bytes =
     (payload_bytes_remaining >= 32'd4) ? 3'd4 : 3'(payload_bytes_remaining);
   assign expected_keep = keep_for_byte_count(expected_beat_bytes);
@@ -158,7 +156,7 @@ module packed_dma_packet_parser #(
     if (!rst_n) begin
       state <= S_HEADER;
       header_word_index <= '0;
-      payload_bytes_received <= '0;
+      payload_bytes_remaining <= '0;
       packet_type <= '0;
       job_id <= '0;
       tensor_id <= '0;
@@ -187,7 +185,7 @@ module packed_dma_packet_parser #(
       if (clear) begin
         state <= S_HEADER;
         header_word_index <= '0;
-        payload_bytes_received <= '0;
+        payload_bytes_remaining <= '0;
         payload_buffer_valid <= 1'b0;
         error_code <= DMA_PACKET_ERROR_NONE;
         error_count <= '0;
@@ -227,7 +225,7 @@ module packed_dma_packet_parser #(
                   end
                   3'd7: begin
                     payload_length <= s_axis_tdata;
-                    payload_bytes_received <= '0;
+                    payload_bytes_remaining <= s_axis_tdata;
                     packet_start <= 1'b1;
                     header_word_index <= '0;
                     state <= S_PAYLOAD;
@@ -248,7 +246,7 @@ module packed_dma_packet_parser #(
                 error_valid <= 1'b1;
                 error_code <= payload_error_code;
                 error_count <= error_count + 32'd1;
-                payload_bytes_received <= '0;
+                payload_bytes_remaining <= '0;
                 state <= s_axis_tlast ? S_HEADER : S_DISCARD;
               end else begin
                 payload_buffer_valid <= 1'b1;
@@ -256,12 +254,12 @@ module packed_dma_packet_parser #(
                 payload_buffer_keep <= s_axis_tkeep;
                 payload_buffer_last <= s_axis_tlast;
                 if (expected_last) begin
-                  payload_bytes_received <= '0;
+                  payload_bytes_remaining <= '0;
                   packet_done <= 1'b1;
                   state <= S_HEADER;
                 end else begin
-                  payload_bytes_received <=
-                    payload_bytes_received + 32'(bytes_for_keep(s_axis_tkeep));
+                  payload_bytes_remaining <= payload_bytes_remaining -
+                    32'(bytes_for_keep(s_axis_tkeep));
                 end
               end
             end
@@ -271,14 +269,14 @@ module packed_dma_packet_parser #(
             if (input_transfer && s_axis_tlast) begin
               state <= S_HEADER;
               header_word_index <= '0;
-              payload_bytes_received <= '0;
+              payload_bytes_remaining <= '0;
             end
           end
 
           default: begin
             state <= S_HEADER;
             header_word_index <= '0;
-            payload_bytes_received <= '0;
+            payload_bytes_remaining <= '0;
           end
         endcase
       end

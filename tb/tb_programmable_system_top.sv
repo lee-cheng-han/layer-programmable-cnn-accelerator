@@ -21,6 +21,7 @@ module tb_programmable_system_top;
   localparam logic [11:0] ADDR_PARAMETER_BANKS = 12'h054;
   localparam logic [11:0] ADDR_INPUT_DDR_LO = 12'h058;
   localparam logic [11:0] ADDR_OUTPUT_DDR_LO = 12'h060;
+  localparam logic [11:0] ADDR_SATURATION_EVENTS = 12'h068;
   localparam logic [11:0] ADDR_VERSION = 12'h0FC;
 
   logic aclk = 1'b0;
@@ -199,6 +200,7 @@ module tb_programmable_system_top;
         write_metadata(2, tensor, 4, 32'd6);
         write_metadata(2, tensor, 5, 32'h0002_0003);
         write_metadata(2, tensor, 6, 32'h0101_0001);
+        write_metadata(2, tensor, 7, 32'd0);
         write_metadata(2, tensor, 9, 32'd3);
         write_metadata(2, tensor, 10, 32'd1);
         write_metadata(2, tensor, 11, 32'd1);
@@ -206,6 +208,9 @@ module tb_programmable_system_top;
       end
       write_metadata(3, 0, 0, 32'h00C0_0001);
       write_metadata(3, 0, 1, 32'd0);
+      write_metadata(3, 0, 2, 32'h0001_0001);
+      write_metadata(3, 0, 16, 32'd1);
+      write_metadata(3, 0, 17, 32'd0);
       commit_metadata(3, 0);
     end
   endtask
@@ -260,7 +265,7 @@ module tb_programmable_system_top;
     repeat (2) @(posedge aclk);
 
     axi_read(ADDR_VERSION, value);
-    if (value != 32'h0005_0000) $fatal(1, "bad register version");
+    if (value != 32'h0005_0001) $fatal(1, "bad register version");
     axi_write(ADDR_JOB_ID, 32'd99);
     axi_write(ADDR_PARAMETER_LAYER, 32'd0);
     axi_write(ADDR_MODEL_COMMAND, 32'h1);
@@ -302,6 +307,8 @@ module tb_programmable_system_top;
     if (value != 1) $fatal(1, "completed layer count mismatch");
     axi_read(ADDR_PACKET_ERRORS, value);
     if (value != 0) $fatal(1, "packet errors observed");
+    axi_read(ADDR_SATURATION_EVENTS, value);
+    if (value != 0) $fatal(1, "unexpected saturation events");
     axi_read(ADDR_ACTIVE_TENSORS, value);
     if (value != 32'h0001_0000) $fatal(1, "active tensor context mismatch");
     axi_read(ADDR_INPUT_DDR_LO, value);

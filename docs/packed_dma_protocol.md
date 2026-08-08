@@ -3,10 +3,9 @@
 ## Scope
 
 The programmable runtime uses a versioned 32-bit AXI-Stream packet format for
-activation tiles, layer parameters, and output tiles. The protocol RTL is
-implemented and verified through the programmable tiled-layer runtime. The
-preserved fixed-network Zybo block design still uses its original packet path;
-board integration of the programmable runtime remains a separate step.
+activation tiles, residual tiles, layer parameters, and output tiles. The
+protocol RTL is implemented and verified through the programmable tiled-layer
+runtime selected by the production Zybo block design.
 
 Every packet consists of eight full header beats followed by an exact-length
 payload:
@@ -78,6 +77,14 @@ tile: `channel_offset=0` and `channel_count=Cin`. Its exact input byte count is:
 ```text
 source_width * source_height * Cin
 ```
+
+For a final layer with residual add or subtract enabled, the normal clipped
+convolution input packet is followed by a second `INPUT_TILE` packet carrying
+the residual tensor. It uses the same output rectangle, `channel_offset=0`,
+and `channel_count=Cout`; its exact byte count is
+`tile_width * tile_height * Cout`. The residual operand and convolution result
+are both post-requantization signed INT8 values. Their sum or difference is
+saturated to signed INT8 before output packing.
 
 An `OUTPUT_TILE` payload is ordinary NHWC output data for the header rectangle,
 with exact length:

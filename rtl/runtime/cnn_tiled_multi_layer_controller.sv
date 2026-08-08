@@ -30,6 +30,7 @@ module cnn_tiled_multi_layer_controller #(
   input  logic [15:0] descriptor_input_tensor_id,
   input  logic [15:0] descriptor_output_tensor_id,
   input  logic [15:0] descriptor_residual_tensor_id,
+  input  logic [15:0] descriptor_quantization_id,
   input  logic [15:0] descriptor_input_width,
   input  logic [15:0] descriptor_input_height,
   input  logic [15:0] descriptor_input_channels,
@@ -60,6 +61,19 @@ module cnn_tiled_multi_layer_controller #(
   input  logic [31:0] descriptor_output_row_stride,
   input  logic [31:0] descriptor_output_pixel_stride,
   input  logic [31:0] descriptor_output_channel_stride,
+  input  logic [15:0] descriptor_output_tensor_quantization_id,
+  input  logic descriptor_residual_tensor_valid,
+  input  logic [15:0] descriptor_residual_width,
+  input  logic [15:0] descriptor_residual_height,
+  input  logic [15:0] descriptor_residual_channels,
+  input  logic [15:0] descriptor_residual_quantization_id,
+  input  logic [63:0] descriptor_residual_ddr_offset,
+  input  logic descriptor_quantization_valid,
+  input  logic [15:0] descriptor_quantization_channel_count,
+  input  logic [7:0] descriptor_rounding_mode,
+  input  logic signed [7:0] descriptor_output_zero_point,
+  input  logic signed [31:0] descriptor_quant_multiplier [MAX_COUT],
+  input  logic [5:0] descriptor_quant_shift [MAX_COUT],
 
   output logic parameter_request,
   output logic [2:0] parameter_layer_id,
@@ -116,6 +130,7 @@ module cnn_tiled_multi_layer_controller #(
   output logic [15:0] current_tile_y,
   output logic [31:0] completed_layer_count,
   output logic [31:0] completed_tile_count,
+  output logic [31:0] saturation_event_count,
   output logic layer_done,
   output logic busy,
   output logic done,
@@ -178,6 +193,8 @@ module cnn_tiled_multi_layer_controller #(
     logic bias_enable;
     logic [15:0] input_tensor_id;
     logic [15:0] output_tensor_id;
+    logic [15:0] residual_tensor_id;
+    logic [15:0] quantization_id;
     logic [63:0] input_ddr_offset;
     logic [31:0] input_allocation_size;
     logic [31:0] input_row_stride;
@@ -188,6 +205,17 @@ module cnn_tiled_multi_layer_controller #(
     logic [31:0] output_row_stride;
     logic [31:0] output_pixel_stride;
     logic [31:0] output_channel_stride;
+    logic quantization_valid;
+    logic [15:0] quantization_channel_count;
+    logic [7:0] rounding_mode;
+    logic signed [7:0] output_zero_point;
+    logic [15:0] output_tensor_quantization_id;
+    logic residual_tensor_valid;
+    logic [15:0] residual_width;
+    logic [15:0] residual_height;
+    logic [15:0] residual_channels;
+    logic [15:0] residual_quantization_id;
+    logic [63:0] residual_ddr_offset;
     logic [15:0] input_width;
     logic [15:0] input_height;
     logic [15:0] output_width;
@@ -204,6 +232,7 @@ module cnn_tiled_multi_layer_controller #(
   logic runtime_done;
   logic runtime_error;
   logic [7:0] runtime_error_code;
+  logic [31:0] runtime_saturation_event_count;
   logic descriptor_semantic_valid;
   logic [7:0] descriptor_error_code;
   logic descriptor_is_final;
@@ -225,6 +254,10 @@ module cnn_tiled_multi_layer_controller #(
   logic [7:0] captured_dilation_x;
   logic [7:0] captured_activation;
   logic [7:0] captured_residual_mode;
+  logic captured_quantization_valid;
+  logic [15:0] captured_quantization_channel_count;
+  logic [7:0] captured_rounding_mode;
+  logic signed [7:0] captured_output_zero_point;
   logic [31:0] expected_output_width_q;
   logic [31:0] expected_output_height_q;
   logic [31:0] output_width_numerator_q;
@@ -257,6 +290,7 @@ module cnn_tiled_multi_layer_controller #(
   logic [15:0] output_width_extent_q;
   logic [15:0] output_height_extent_q;
   logic [15:0] output_channel_extent_q;
+  logic quantization_parameters_valid;
 
   function automatic logic [31:0] multiply_16x16(
     input logic [15:0] lhs,
@@ -295,6 +329,17 @@ module cnn_tiled_multi_layer_controller #(
   logic active_relu_enable;
   logic [15:0] active_tile_width_hint;
   logic [15:0] active_tile_height_hint;
+  logic [15:0] active_residual_tensor_id;
+  logic [15:0] active_quantization_id;
+  logic [15:0] active_output_tensor_quantization_id;
+  logic active_residual_tensor_valid;
+  logic [15:0] active_residual_width;
+  logic [15:0] active_residual_height;
+  logic [15:0] active_residual_channels;
+  logic [15:0] active_residual_quantization_id;
+  logic [63:0] active_residual_ddr_offset;
+  logic signed [31:0] active_quant_multiplier [MAX_COUT];
+  logic [5:0] active_quant_shift [MAX_COUT];
 
   assign descriptor_layer_index = layer_index;
   assign active_layer = layer_index;
@@ -304,6 +349,21 @@ module cnn_tiled_multi_layer_controller #(
     (4'(layer_index) + 4'd1) == layer_count_q;
 
   always_comb begin
+    quantization_parameters_valid = captured_quantization_valid &&
+      (captured_quantization_channel_count == captured_output_channels) &&
+      (captured_rounding_mode == ROUND_HALF_TO_EVEN) &&
+      (captured_output_zero_point == 0) &&
+      (active_quantization_id == active_output_tensor_quantization_id);
+    for (int channel = 0; channel < MAX_COUT; channel++) begin
+      if ((channel < captured_output_channels) &&
+          ((active_quant_multiplier[channel] <= 0) ||
+           (active_quant_shift[channel] > 6'd62))) begin
+        quantization_parameters_valid = 1'b0;
+      end
+    end
+  end
+
+  always_comb begin
     descriptor_semantic_valid = 1'b0;
     descriptor_error_code = MULTI_ERROR_DESCRIPTOR;
 
@@ -311,6 +371,8 @@ module cnn_tiled_multi_layer_controller #(
         (captured_layer_id != 16'(layer_index)) ||
         (captured_last_layer != descriptor_is_final)) begin
       descriptor_error_code = MULTI_ERROR_DESCRIPTOR;
+    end else if (!quantization_parameters_valid) begin
+      descriptor_error_code = MULTI_ERROR_UNSUPPORTED;
     end else if ((captured_opcode != OPCODE_CONV2D) ||
                  !((captured_kernel_width == 1) ||
                    (captured_kernel_width == 3)) ||
@@ -325,7 +387,17 @@ module cnn_tiled_multi_layer_controller #(
                  (captured_dilation_x != 1) ||
                  (captured_dilation_y != 1) ||
                  (captured_activation > ACTIVATION_RELU) ||
-                 (captured_residual_mode != RESIDUAL_NONE)) begin
+                 (captured_residual_mode > RESIDUAL_POST_QUANT_SUBTRACT) ||
+                 ((captured_residual_mode == RESIDUAL_NONE) &&
+                  (active_residual_tensor_id != NO_TENSOR_ID)) ||
+                 ((captured_residual_mode != RESIDUAL_NONE) &&
+                  ((active_residual_tensor_id == NO_TENSOR_ID) ||
+                   !active_residual_tensor_valid ||
+                   (active_residual_width != active_output_width) ||
+                   (active_residual_height != active_output_height) ||
+                   (active_residual_channels != captured_output_channels) ||
+                   (active_residual_quantization_id !=
+                    active_output_tensor_quantization_id)))) begin
       descriptor_error_code = MULTI_ERROR_UNSUPPORTED;
     end else if ((active_input_width == 0) ||
                  (active_input_height == 0) ||
@@ -406,6 +478,12 @@ module cnn_tiled_multi_layer_controller #(
     .relu_enable(active_relu_enable),
     .tile_width_hint(active_tile_width_hint),
     .tile_height_hint(active_tile_height_hint),
+    .per_channel_quant_enable(1'b1),
+    .quant_multiplier(active_quant_multiplier),
+    .quant_shift(active_quant_shift),
+    .output_zero_point(captured_output_zero_point),
+    .residual_tensor_id(active_residual_tensor_id),
+    .residual_mode(captured_residual_mode),
     .parameter_request(parameter_request),
     .parameter_layer_id(parameter_layer_id),
     .parameter_ready(parameter_ready),
@@ -444,6 +522,7 @@ module cnn_tiled_multi_layer_controller #(
     .current_tile_x(current_tile_x),
     .current_tile_y(current_tile_y),
     .completed_tile_count(completed_tile_count),
+    .saturation_event_count(runtime_saturation_event_count),
     .busy(),
     .done(runtime_done),
     .error(runtime_error),
@@ -475,6 +554,8 @@ module cnn_tiled_multi_layer_controller #(
       descriptor_snapshot.bias_enable <= descriptor_bias_enable;
       descriptor_snapshot.input_tensor_id <= descriptor_input_tensor_id;
       descriptor_snapshot.output_tensor_id <= descriptor_output_tensor_id;
+      descriptor_snapshot.residual_tensor_id <= descriptor_residual_tensor_id;
+      descriptor_snapshot.quantization_id <= descriptor_quantization_id;
       descriptor_snapshot.input_ddr_offset <= descriptor_input_ddr_offset;
       descriptor_snapshot.input_allocation_size <=
         descriptor_input_allocation_size;
@@ -490,6 +571,21 @@ module cnn_tiled_multi_layer_controller #(
         descriptor_output_pixel_stride;
       descriptor_snapshot.output_channel_stride <=
         descriptor_output_channel_stride;
+      descriptor_snapshot.quantization_valid <= descriptor_quantization_valid;
+      descriptor_snapshot.quantization_channel_count <=
+        descriptor_quantization_channel_count;
+      descriptor_snapshot.rounding_mode <= descriptor_rounding_mode;
+      descriptor_snapshot.output_zero_point <= descriptor_output_zero_point;
+      descriptor_snapshot.output_tensor_quantization_id <=
+        descriptor_output_tensor_quantization_id;
+      descriptor_snapshot.residual_tensor_valid <=
+        descriptor_residual_tensor_valid;
+      descriptor_snapshot.residual_width <= descriptor_residual_width;
+      descriptor_snapshot.residual_height <= descriptor_residual_height;
+      descriptor_snapshot.residual_channels <= descriptor_residual_channels;
+      descriptor_snapshot.residual_quantization_id <=
+        descriptor_residual_quantization_id;
+      descriptor_snapshot.residual_ddr_offset <= descriptor_residual_ddr_offset;
       descriptor_snapshot.input_width <= descriptor_input_width;
       descriptor_snapshot.input_height <= descriptor_input_height;
       descriptor_snapshot.output_width <= descriptor_output_width;
@@ -519,8 +615,21 @@ module cnn_tiled_multi_layer_controller #(
       captured_dilation_x <= '0;
       captured_activation <= '0;
       captured_residual_mode <= '0;
+      captured_quantization_valid <= 1'b0;
+      captured_quantization_channel_count <= '0;
+      captured_rounding_mode <= '0;
+      captured_output_zero_point <= '0;
       active_input_tensor_id <= '0;
       active_output_tensor_id <= '0;
+      active_residual_tensor_id <= NO_TENSOR_ID;
+      active_quantization_id <= '0;
+      active_output_tensor_quantization_id <= '0;
+      active_residual_tensor_valid <= 1'b0;
+      active_residual_width <= '0;
+      active_residual_height <= '0;
+      active_residual_channels <= '0;
+      active_residual_quantization_id <= '0;
+      active_residual_ddr_offset <= '0;
       active_input_ddr_offset <= '0;
       active_input_allocation_size <= '0;
       active_input_row_stride <= '0;
@@ -547,6 +656,10 @@ module cnn_tiled_multi_layer_controller #(
       active_relu_enable <= 1'b0;
       active_tile_width_hint <= '0;
       active_tile_height_hint <= '0;
+      for (int channel = 0; channel < MAX_COUT; channel++) begin
+        active_quant_multiplier[channel] <= '0;
+        active_quant_shift[channel] <= '0;
+      end
     end else if (capture_active_q) begin
       captured_descriptor_valid <= descriptor_snapshot.valid;
       captured_layer_id <= descriptor_snapshot.layer_id;
@@ -566,8 +679,24 @@ module cnn_tiled_multi_layer_controller #(
       captured_dilation_x <= descriptor_snapshot.dilation_x;
       captured_activation <= descriptor_snapshot.activation;
       captured_residual_mode <= descriptor_snapshot.residual_mode;
+      captured_quantization_valid <= descriptor_snapshot.quantization_valid;
+      captured_quantization_channel_count <=
+        descriptor_snapshot.quantization_channel_count;
+      captured_rounding_mode <= descriptor_snapshot.rounding_mode;
+      captured_output_zero_point <= descriptor_snapshot.output_zero_point;
       active_input_tensor_id <= descriptor_snapshot.input_tensor_id;
       active_output_tensor_id <= descriptor_snapshot.output_tensor_id;
+      active_residual_tensor_id <= descriptor_snapshot.residual_tensor_id;
+      active_quantization_id <= descriptor_snapshot.quantization_id;
+      active_output_tensor_quantization_id <=
+        descriptor_snapshot.output_tensor_quantization_id;
+      active_residual_tensor_valid <= descriptor_snapshot.residual_tensor_valid;
+      active_residual_width <= descriptor_snapshot.residual_width;
+      active_residual_height <= descriptor_snapshot.residual_height;
+      active_residual_channels <= descriptor_snapshot.residual_channels;
+      active_residual_quantization_id <=
+        descriptor_snapshot.residual_quantization_id;
+      active_residual_ddr_offset <= descriptor_snapshot.residual_ddr_offset;
       active_input_ddr_offset <= descriptor_snapshot.input_ddr_offset;
       active_input_allocation_size <=
         descriptor_snapshot.input_allocation_size;
@@ -597,6 +726,10 @@ module cnn_tiled_multi_layer_controller #(
       active_relu_enable <= descriptor_snapshot.activation == ACTIVATION_RELU;
       active_tile_width_hint <= descriptor_snapshot.tile_width_hint;
       active_tile_height_hint <= descriptor_snapshot.tile_height_hint;
+      for (int channel = 0; channel < MAX_COUT; channel++) begin
+        active_quant_multiplier[channel] <= descriptor_quant_multiplier[channel];
+        active_quant_shift[channel] <= descriptor_quant_shift[channel];
+      end
     end
   end
 
@@ -644,6 +777,7 @@ module cnn_tiled_multi_layer_controller #(
       output_height_extent_q <= '0;
       output_channel_extent_q <= '0;
       completed_layer_count <= '0;
+      saturation_event_count <= '0;
       layer_done <= 1'b0;
       done <= 1'b0;
       error <= 1'b0;
@@ -658,6 +792,7 @@ module cnn_tiled_multi_layer_controller #(
         state <= S_IDLE;
         layer_index <= '0;
         completed_layer_count <= '0;
+        saturation_event_count <= '0;
         error <= 1'b0;
         error_code <= MULTI_ERROR_NONE;
         error_layer <= '0;
@@ -672,6 +807,7 @@ module cnn_tiled_multi_layer_controller #(
             if (start) begin
               layer_index <= '0;
               completed_layer_count <= '0;
+              saturation_event_count <= '0;
               error <= 1'b0;
               error_code <= MULTI_ERROR_NONE;
               error_layer <= '0;
@@ -888,6 +1024,8 @@ module cnn_tiled_multi_layer_controller #(
                 previous_output_channels <= 16'(active_output_channels);
                 previous_output_ddr_offset <= active_output_ddr_offset;
                 completed_layer_count <= completed_layer_count + 32'd1;
+                saturation_event_count <= saturation_event_count +
+                  runtime_saturation_event_count;
                 layer_done <= 1'b1;
                 state <= descriptor_is_final ?
                   S_DONE : S_ADVANCE_LAYER;

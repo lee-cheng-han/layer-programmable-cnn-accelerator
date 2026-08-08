@@ -35,6 +35,12 @@ module tb_tiled_layer_runtime_3x3_stride2;
   logic relu_enable = 1'b0;
   logic [15:0] tile_width_hint = 16'd2;
   logic [15:0] tile_height_hint = 16'd2;
+  logic per_channel_quant_enable = 1'b0;
+  logic signed [31:0] quant_multiplier [MAX_COUT];
+  logic [5:0] quant_shift [MAX_COUT];
+  logic signed [7:0] output_zero_point = '0;
+  logic [15:0] residual_tensor_id = 16'hFFFF;
+  logic [7:0] residual_mode = 8'd0;
 
   logic parameter_request;
   logic [2:0] parameter_layer_id;
@@ -76,6 +82,7 @@ module tb_tiled_layer_runtime_3x3_stride2;
   logic [15:0] current_tile_x;
   logic [15:0] current_tile_y;
   logic [31:0] completed_tile_count;
+  logic [31:0] saturation_event_count;
   logic busy;
   logic done;
   logic error;
@@ -125,6 +132,8 @@ module tb_tiled_layer_runtime_3x3_stride2;
   always_comb begin
     for (int channel = 0; channel < MAX_COUT; channel++) begin
       parameter_bias[channel] = '0;
+      quant_multiplier[channel] = 32'sd1;
+      quant_shift[channel] = '0;
     end
   end
 

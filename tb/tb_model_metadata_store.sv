@@ -244,6 +244,7 @@ module tb_model_metadata_store;
       write_word(METADATA_TENSOR, 0, 4, 32'd4096);
       write_word(METADATA_TENSOR, 0, 5, 32'h0005_0005);
       write_word(METADATA_TENSOR, 0, 6, 32'h0101_0001);
+      write_word(METADATA_TENSOR, 0, 7, 32'd0);
       write_word(METADATA_TENSOR, 0, 9, 32'd5);
       write_word(METADATA_TENSOR, 0, 10, 32'd1);
       write_word(METADATA_TENSOR, 0, 11, 32'd1);
@@ -255,6 +256,7 @@ module tb_model_metadata_store;
       write_word(METADATA_TENSOR, 1, 4, 32'd8192);
       write_word(METADATA_TENSOR, 1, 5, 32'h0005_0005);
       write_word(METADATA_TENSOR, 1, 6, 32'h0101_0001);
+      write_word(METADATA_TENSOR, 1, 7, 32'd0);
       write_word(METADATA_TENSOR, 1, 9, 32'd5);
       write_word(METADATA_TENSOR, 1, 10, 32'd1);
       write_word(METADATA_TENSOR, 1, 11, 32'd1);
@@ -262,6 +264,9 @@ module tb_model_metadata_store;
 
       write_word(METADATA_QUANTIZATION, 0, 0, 32'h00C0_0001);
       write_word(METADATA_QUANTIZATION, 0, 1, 32'h0000_0000);
+      write_word(METADATA_QUANTIZATION, 0, 2, 32'h0001_0001);
+      write_word(METADATA_QUANTIZATION, 0, 16, 32'd1);
+      write_word(METADATA_QUANTIZATION, 0, 17, 32'd0);
       if (commit_quantization) begin
         commit_record(METADATA_QUANTIZATION, 0);
       end

@@ -7,10 +7,9 @@ metadata bank. It sequences one to eight V1 convolution descriptors without
 rebuilding the bitstream and reuses the existing `single_layer_scheduler` for
 both 1x1 and 3x3 layers.
 
-This is a verified pre-integration path. Runtime parameter banks and the packed
-DMA protocol are implemented and tested around it; the board-facing AXI-stream
-system continues to use the preserved fixed three-layer controller until
-Phase 8 adds DDR-backed tiled execution.
+The same active descriptor view now drives the integrated packed-DMA tiled
+runtime selected by the production Zybo block design. The array-backed path is
+retained as focused controller regression coverage.
 
 ## Execution Path
 
@@ -39,7 +38,8 @@ stored. Intermediate results alternate between two logical feature banks.
 - one to `MAX_CIN` input channels and one to `MAX_COUT` output channels
 - optional bias and ReLU
 - optional final post-quantization residual add or subtract
-- temporary power-of-two shift quantization supplied with each parameter set
+- per-output-channel signed multiplier/shift requantization
+- round-half-to-even, signed INT8 zero point, and signed INT8 saturation
 
 Before requesting parameters, the controller rejects inactive models,
 unsupported operations, invalid geometry, broken tensor chains, incorrect
@@ -49,14 +49,12 @@ signed INT8 plus or minus signed INT8 with saturation to signed INT8.
 ## Parameter Boundary
 
 `parameter_request` identifies the current layer through `active_layer`.
-Phase 6 now resolves that request against two valid, layer-tagged parameter
-banks. The selected bank holds weights, bias, and compatibility quantization
-controls stable until `parameter_release`. Parameter wait cycles naturally
+Phase 6 resolves that request against two valid, layer-tagged parameter banks.
+The selected bank holds weights and bias stable until `parameter_release`;
+the active metadata store supplies the layer's per-channel quantization
+descriptor. Parameter wait cycles naturally
 stall execution, allowing software or a future DMA prefetch engine to refill
 the other bank. See [runtime_parameter_banks.md](runtime_parameter_banks.md).
-
-Full per-output-channel multiplier/shift requantization remains the Phase 9
-runtime postprocessing milestone.
 
 ## Verification
 

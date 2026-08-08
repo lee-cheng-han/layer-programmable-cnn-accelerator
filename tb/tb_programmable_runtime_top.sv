@@ -52,6 +52,7 @@ module tb_programmable_runtime_top;
   logic [15:0] current_tile_y;
   logic [31:0] completed_layer_count;
   logic [31:0] completed_tile_count;
+  logic [31:0] saturation_event_count;
   logic layer_done;
   logic busy;
   logic done;
@@ -164,13 +165,13 @@ module tb_programmable_runtime_top;
       write_word(METADATA_LAYER, 0, 1, 32'h0001_0000);
       write_word(METADATA_LAYER, 0, 2, 32'h0000_0002);
       write_word(METADATA_LAYER, 0, 3, 32'h0001_0000);
-      write_word(METADATA_LAYER, 0, 4, 32'h0000_FFFF);
+      write_word(METADATA_LAYER, 0, 4, 32'h0000_0000);
       write_word(METADATA_LAYER, 0, 6, 32'd1);
       write_word(METADATA_LAYER, 0, 8, 32'd0);
       write_word(METADATA_LAYER, 0, 9, parameter_crc);
       write_word(METADATA_LAYER, 0, 10, 32'h0101_0101);
       write_word(METADATA_LAYER, 0, 11, 32'd0);
-      write_word(METADATA_LAYER, 0, 12, 32'h0000_0101);
+      write_word(METADATA_LAYER, 0, 12, 32'h0100_0101);
       write_word(METADATA_LAYER, 0, 13, 32'h0002_0002);
       commit_record(METADATA_LAYER, 0);
 
@@ -183,6 +184,7 @@ module tb_programmable_runtime_top;
         write_word(METADATA_TENSOR, tensor, 4, 32'd6);
         write_word(METADATA_TENSOR, tensor, 5, 32'h0002_0003);
         write_word(METADATA_TENSOR, tensor, 6, 32'h0101_0001);
+        write_word(METADATA_TENSOR, tensor, 7, 32'd0);
         write_word(METADATA_TENSOR, tensor, 9, 32'd3);
         write_word(METADATA_TENSOR, tensor, 10, 32'd1);
         write_word(METADATA_TENSOR, tensor, 11, 32'd1);
@@ -191,6 +193,9 @@ module tb_programmable_runtime_top;
 
       write_word(METADATA_QUANTIZATION, 0, 0, 32'h00C0_0001);
       write_word(METADATA_QUANTIZATION, 0, 1, 32'd0);
+      write_word(METADATA_QUANTIZATION, 0, 2, 32'h0001_0001);
+      write_word(METADATA_QUANTIZATION, 0, 16, 32'd3);
+      write_word(METADATA_QUANTIZATION, 0, 17, 32'd1);
       commit_record(METADATA_QUANTIZATION, 0);
     end
   endtask
@@ -262,10 +267,14 @@ module tb_programmable_runtime_top;
     pulse(4);
     wait (busy && (current_tile_x == 0));
     send_packet(DMA_PACKET_INPUT_TILE, 0, 0, 0, 2,
-                32'h0504_0201, 4'b1111, 4);
+                32'h0564_0201, 4'b1111, 4);
+    send_packet(DMA_PACKET_INPUT_TILE, 0, 0, 0, 2,
+                32'h0564_0201, 4'b1111, 4);
     wait (busy && (current_tile_x == 2));
     send_packet(DMA_PACKET_INPUT_TILE, 0, 0, 2, 1,
-                32'h0000_0603, 4'b0011, 2);
+                32'h0000_9C03, 4'b0011, 2);
+    send_packet(DMA_PACKET_INPUT_TILE, 0, 0, 2, 1,
+                32'h0000_9C03, 4'b0011, 2);
 
     fork
       wait (done);
@@ -284,11 +293,15 @@ module tb_programmable_runtime_top;
              completed_layer_count, captured_count);
     end
     if ((captured_data[3] != {16'd0, 16'd1}) ||
-        (captured_data[8] != 32'h0504_0201) ||
+        (captured_data[8] != 32'h0D7F_0503) ||
         (captured_data[12] != {16'd0, 16'd1}) ||
-        (captured_data[17] != 32'h0000_0603) ||
+        (captured_data[17] != 32'h0000_8007) ||
         (captured_keep[17] != 4'b0011) || !captured_last[17]) begin
       $fatal(1, "integrated output packet mismatch");
+    end
+    if (saturation_event_count != 4) begin
+      $fatal(1, "saturation count mismatch got=%0d expected=4",
+             saturation_event_count);
     end
 
     $display("[PASS] active model to packed tiled output integration");

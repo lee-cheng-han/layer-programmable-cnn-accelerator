@@ -40,6 +40,12 @@ module cnn_tiled_layer_runtime #(
   input  logic relu_enable,
   input  logic [DIM_W-1:0] tile_width_hint,
   input  logic [DIM_W-1:0] tile_height_hint,
+  input  logic per_channel_quant_enable,
+  input  logic signed [31:0] quant_multiplier [MAX_COUT],
+  input  logic [5:0] quant_shift [MAX_COUT],
+  input  logic signed [7:0] output_zero_point,
+  input  logic [15:0] residual_tensor_id,
+  input  logic [7:0] residual_mode,
 
   output logic parameter_request,
   output logic [2:0] parameter_layer_id,
@@ -82,6 +88,7 @@ module cnn_tiled_layer_runtime #(
   output logic [15:0] current_tile_x,
   output logic [15:0] current_tile_y,
   output logic [31:0] completed_tile_count,
+  output logic [31:0] saturation_event_count,
   output logic busy,
   output logic done,
   output logic error,
@@ -102,6 +109,7 @@ module cnn_tiled_layer_runtime #(
     S_WAIT_TILE,
     S_CALCULATE_PAYLOAD,
     S_WAIT_INPUT,
+    S_WAIT_RESIDUAL,
     S_START_TILE,
     S_RUN_TILE,
     S_RELEASE_PARAMETER,
@@ -159,6 +167,16 @@ module cnn_tiled_layer_runtime #(
   logic loader_done;
   logic loader_error;
   logic [7:0] loader_error_code;
+  logic input_activation_ready;
+  logic residual_packet_ready;
+  logic residual_activation_ready;
+  logic residual_loader_write_enable;
+  logic [ADDR_W-1:0] residual_loader_write_pixel;
+  logic [COUNT_W-1:0] residual_loader_write_channel;
+  logic signed [DATA_W-1:0] residual_loader_write_data;
+  logic residual_loader_done;
+  logic residual_loader_error;
+  logic [7:0] residual_loader_error_code;
 
   logic [ADDR_W-1:0] scratch_activation_read_pixel;
   logic [COUNT_W-1:0] scratch_activation_read_c_base;
@@ -173,6 +191,7 @@ module cnn_tiled_layer_runtime #(
   logic signed [DATA_W-1:0] scheduler_output_data [MAX_COUT];
   logic scheduler_output_last;
   logic scheduler_done;
+  logic [31:0] scheduler_saturation_count;
   logic signed [DATA_W-1:0] dummy_activation [MAX_LOCAL_PIXELS*MAX_CIN];
   logic signed [DATA_W-1:0] dummy_weights_1x1 [MAX_COUT][MAX_CIN];
   logic signed [DATA_W-1:0] dummy_weights_3x3 [MAX_COUT][MAX_CIN][9];
@@ -184,6 +203,10 @@ module cnn_tiled_layer_runtime #(
   logic signed [DATA_W-1:0] serializer_byte_data;
   logic serializer_done;
   logic serializer_error;
+  logic [31:0] serializer_residual_read_pixel;
+  logic [COUNT_W-1:0] serializer_residual_read_channel;
+  logic signed [DATA_W-1:0] serializer_residual_read_data;
+  logic serializer_residual_saturation_event;
 
   logic writer_start;
   logic writer_ready;
@@ -194,6 +217,8 @@ module cnn_tiled_layer_runtime #(
   logic output_done_q;
   logic parameter_acquired_q;
   logic input_packet_accepted_q;
+
+  import cnn_accel_abi_pkg::*;
 
   function automatic logic [23:0] multiply_area_channels(
     input logic [15:0] area,
@@ -214,8 +239,11 @@ module cnn_tiled_layer_runtime #(
   assign writer_start = scheduler_start;
   assign serializer_clear = clear || (state == S_WAIT_TILE);
   assign activation_packet_ready =
-    (state == S_WAIT_INPUT) && !input_packet_accepted_q &&
-    loader_packet_ready;
+    !input_packet_accepted_q &&
+    (((state == S_WAIT_INPUT) && loader_packet_ready) ||
+     ((state == S_WAIT_RESIDUAL) && residual_packet_ready));
+  assign activation_ready = (state == S_WAIT_RESIDUAL) ?
+    residual_activation_ready : input_activation_ready;
 
   spatial_tile_planner #(
     .MAX_CHANNELS((MAX_CIN > MAX_COUT) ? MAX_CIN : MAX_COUT),
@@ -313,7 +341,7 @@ module cnn_tiled_layer_runtime #(
     .packet_channel_count(activation_channel_count),
     .packet_payload_length(activation_payload_length),
     .payload_valid(activation_valid),
-    .payload_ready(activation_ready),
+    .payload_ready(input_activation_ready),
     .payload_data(activation_data),
     .payload_keep(activation_keep),
     .payload_last(activation_last),
@@ -325,6 +353,59 @@ module cnn_tiled_layer_runtime #(
     .done(loader_done),
     .error(loader_error),
     .error_code(loader_error_code)
+  );
+
+  halo_tile_load_controller #(
+    .MAX_LOCAL_PIXELS(MAX_TILE_WIDTH * MAX_TILE_HEIGHT),
+    .MAX_CHANNELS(MAX_COUT),
+    .DIM_W(DIM_W),
+    .COUNT_W(COUNT_W),
+    .ADDR_W(ADDR_W)
+  ) u_residual_tile_loader (
+    .clk(clk),
+    .rst_n(rst_n),
+    .clear(clear),
+    .expected_valid(state == S_WAIT_RESIDUAL),
+    .expected_job_id(job_id),
+    .expected_tensor_id(residual_tensor_id),
+    .expected_layer_id(layer_id),
+    .expected_tile_x(tile_x_q),
+    .expected_tile_y(tile_y_q),
+    .expected_tile_width(tile_width_q),
+    .expected_tile_height(tile_height_q),
+    .local_input_width(tile_width_q),
+    .local_input_height(tile_height_q),
+    .source_width(tile_width_q),
+    .source_height(tile_height_q),
+    .local_x_offset('0),
+    .local_y_offset('0),
+    .input_channels(cout),
+    .expected_payload_bytes(output_payload_bytes_q),
+    .packet_start(activation_packet_start),
+    .packet_ready(residual_packet_ready),
+    .packet_job_id(activation_job_id),
+    .packet_tensor_id(activation_tensor_id),
+    .packet_layer_id(activation_layer_id),
+    .packet_tile_x(activation_tile_x),
+    .packet_tile_y(activation_tile_y),
+    .packet_tile_width(activation_tile_width),
+    .packet_tile_height(activation_tile_height),
+    .packet_channel_offset(activation_channel_offset),
+    .packet_channel_count(activation_channel_count),
+    .packet_payload_length(activation_payload_length),
+    .payload_valid(activation_valid),
+    .payload_ready(residual_activation_ready),
+    .payload_data(activation_data),
+    .payload_keep(activation_keep),
+    .payload_last(activation_last),
+    .scratch_write_enable(residual_loader_write_enable),
+    .scratch_write_pixel(residual_loader_write_pixel),
+    .scratch_write_channel(residual_loader_write_channel),
+    .scratch_write_data(residual_loader_write_data),
+    .busy(),
+    .done(residual_loader_done),
+    .error(residual_loader_error),
+    .error_code(residual_loader_error_code)
   );
 
   banked_activation_scratchpad #(
@@ -348,6 +429,29 @@ module cnn_tiled_layer_runtime #(
     .debug_read_pixel('0),
     .debug_read_channel('0),
     .debug_read_data()
+  );
+
+  banked_activation_scratchpad #(
+    .PC(PC),
+    .MAX_PIXELS(MAX_TILE_WIDTH * MAX_TILE_HEIGHT),
+    .MAX_C(MAX_COUT),
+    .DATA_W(DATA_W),
+    .DIM_W(DIM_W),
+    .COUNT_W(COUNT_W),
+    .ADDR_W(ADDR_W)
+  ) u_residual_scratchpad (
+    .clk(clk),
+    .write_enable(residual_loader_write_enable),
+    .write_pixel(residual_loader_write_pixel),
+    .write_channel(residual_loader_write_channel),
+    .write_data(residual_loader_write_data),
+    .read_pixel('0),
+    .read_c_base('0),
+    .lane_mask('0),
+    .lane_data(),
+    .debug_read_pixel(serializer_residual_read_pixel),
+    .debug_read_channel(serializer_residual_read_channel),
+    .debug_read_data(serializer_residual_read_data)
   );
 
   single_layer_scheduler #(
@@ -381,6 +485,10 @@ module cnn_tiled_layer_runtime #(
     .relu_enable(relu_enable),
     .quant_enable(parameter_quant_enable),
     .quant_shift(parameter_quant_shift),
+    .per_channel_quant_enable(per_channel_quant_enable),
+    .quant_multiplier(quant_multiplier),
+    .per_channel_quant_shift(quant_shift),
+    .output_zero_point(output_zero_point),
     .activation(dummy_activation),
     .weights_1x1(dummy_weights_1x1),
     .weights_3x3(dummy_weights_3x3),
@@ -404,6 +512,7 @@ module cnn_tiled_layer_runtime #(
     .output_pixel_channels(scheduler_output_channels),
     .output_pixel_data(scheduler_output_data),
     .output_pixel_last(scheduler_output_last),
+    .output_pixel_saturation_count(scheduler_saturation_count),
     .current_x(),
     .current_y(),
     .busy(),
@@ -423,13 +532,20 @@ module cnn_tiled_layer_runtime #(
     .pixel_channels(scheduler_output_channels),
     .pixel_data(scheduler_output_data),
     .pixel_last(scheduler_output_last),
+    .pixel_index(scheduler_output_index),
+    .residual_enable(residual_mode != RESIDUAL_NONE),
+    .subtract_residual(residual_mode == RESIDUAL_POST_QUANT_SUBTRACT),
+    .residual_read_pixel(serializer_residual_read_pixel),
+    .residual_read_channel(serializer_residual_read_channel),
+    .residual_read_data(serializer_residual_read_data),
     .byte_valid(serializer_byte_valid),
     .byte_ready(serializer_byte_ready),
     .byte_data(serializer_byte_data),
     .byte_last(),
     .busy(),
     .done(serializer_done),
-    .error(serializer_error)
+    .error(serializer_error),
+    .residual_saturation_event(serializer_residual_saturation_event)
   );
 
   packed_dma_packet_writer #(
@@ -505,6 +621,7 @@ module cnn_tiled_layer_runtime #(
       parameter_acquired_q <= 1'b0;
       input_packet_accepted_q <= 1'b0;
       completed_tile_count <= '0;
+      saturation_event_count <= '0;
       parameter_release <= 1'b0;
       done <= 1'b0;
       error <= 1'b0;
@@ -516,6 +633,7 @@ module cnn_tiled_layer_runtime #(
       if (clear) begin
         state <= S_IDLE;
         completed_tile_count <= '0;
+        saturation_event_count <= '0;
         compute_done_q <= 1'b0;
         output_done_q <= 1'b0;
         parameter_acquired_q <= 1'b0;
@@ -525,6 +643,13 @@ module cnn_tiled_layer_runtime #(
       end else begin
         if (activation_packet_start && activation_packet_ready) begin
           input_packet_accepted_q <= 1'b1;
+        end
+        if (scheduler_output_valid && scheduler_output_ready) begin
+          saturation_event_count <= saturation_event_count +
+            scheduler_saturation_count;
+        end
+        if (serializer_residual_saturation_event) begin
+          saturation_event_count <= saturation_event_count + 32'd1;
         end
 
         if (start && (state != S_IDLE)) begin
@@ -541,6 +666,7 @@ module cnn_tiled_layer_runtime #(
             S_IDLE: begin
               if (start) begin
                 completed_tile_count <= '0;
+                saturation_event_count <= '0;
                 error <= 1'b0;
                 error_code <= RUNTIME_ERROR_NONE;
                 if (layer_id[15:3] != 0) begin
@@ -594,6 +720,20 @@ module cnn_tiled_layer_runtime #(
             S_WAIT_INPUT: begin
               if (loader_done) begin
                 if (loader_error) begin
+                  error <= 1'b1;
+                  error_code <= RUNTIME_ERROR_TILE_LOAD;
+                  state <= S_ERROR;
+                end else begin
+                  input_packet_accepted_q <= 1'b0;
+                  state <= (residual_mode == RESIDUAL_NONE) ?
+                    S_START_TILE : S_WAIT_RESIDUAL;
+                end
+              end
+            end
+
+            S_WAIT_RESIDUAL: begin
+              if (residual_loader_done) begin
+                if (residual_loader_error) begin
                   error <= 1'b1;
                   error_code <= RUNTIME_ERROR_TILE_LOAD;
                   state <= S_ERROR;

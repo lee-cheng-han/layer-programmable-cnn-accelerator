@@ -43,21 +43,21 @@ AXI-Lite interconnect
  +--> AXI DMA control registers
 
 
-DDR tensor packet buffer
+DDR model, parameter, and tile buffers
  |
  | AXI DMA MM2S
  v
-tensor_packet_router
+packed_dma_packet_parser / packed_dma_runtime_router
  |
- | activation, bias, weight streams
+ | activation/residual tiles and parameter streams
  v
-stream_loaded_multi_layer_job_controller
+cnn_tiled_multi_layer_controller
  |
- | scratchpad-backed 3-layer CNN
+ | descriptor-driven 1x1/3x3 tiled execution
  v
-signed 8-bit RGB output stream
+packed OUTPUT_TILE stream
  |
- | sign-extended 32-bit AXI-Stream
+ | 32-bit AXI-Stream with TKEEP/TLAST
  v
 AXI DMA S2MM
  |
@@ -103,12 +103,15 @@ Input RGB tensor
 | `performance_counters` | Counts job, packet, compute, layer, transfer, and stall cycles |
 | AXI DMA | Moves tensor packets and output pixels between DDR and PL streams |
 
-The production board path now uses `cnn_programmable_system_top`. It connects
+The production board path uses `cnn_programmable_system_top`. It connects
 the atomically active metadata view through `cnn_programmable_job_engine` to
 two runtime parameter banks and the tiled multi-layer runtime. The generated
 Zybo block design selects its `TKEEP`-aware wrapper and routes the CNN and both
 DMA interrupts to the PS. Implementation closure and DDR gather/scatter
-software still remain; the fixed seven-packet path is retained only as a
+software still remain. The numeric path resolves active per-channel
+multiplier/shift/zero-point descriptors, performs pipelined round-half-to-even
+requantization, supports final-layer residual add/subtract, and reports
+saturation events. The fixed seven-packet path is retained only as a
 regression baseline during the transition.
 
 ## Register Map
@@ -118,39 +121,25 @@ The accelerator uses AXI-Lite for control and observability. Tensor payloads are
 | Offset | Register | Description |
 |---:|---|---|
 | `0x000` | `CONTROL` | Start and clear pulses |
-| `0x004` | `STATUS` | Busy, done, error, performance-counting |
+| `0x004` | `STATUS` | Runtime, layer, model, and parameter-bank state |
 | `0x008` | `IRQ_STATUS` | Done/error sticky status |
 | `0x00C` | `IRQ_ENABLE` | Done/error interrupt enables |
-| `0x010` | `IMAGE_WIDTH` | Input/output image width |
-| `0x014` | `IMAGE_HEIGHT` | Input/output image height |
-| `0x018` | `MODE_FLAGS` | Bit 0 enables final residual subtraction |
-| `0x01C` | `ERROR_CODE` | Packet-router or compute error code |
-| `0x020` | `STREAM_STATE` | Packet type and ready-layer state |
-| `0x024` | `PACKET_WORDS` | Current packet payload words accepted |
-| `0x028`-`0x054` | `MODEL_*`, `METADATA_*` | Runtime metadata loading, validation, activation, and identity |
-| `0x080`-`0x0A8` | `PERF_*` | Latency, layer, transfer, and stall counters |
-| `0x0FC` | `VERSION` | Register-map version, `0x00040000` |
-| `0x100`-`0x17C` | `CAPABILITY_*` | Versioned hardware capability record |
-| `0x180`-`0x1BC` | `ERROR_RECORD_*` | Sticky structured-error context |
+| `0x010` | `JOB_ID` | Expected packed-packet job ID |
+| `0x014` | `PARAMETER_LAYER` | Descriptor selected for parameter loading |
+| `0x018`-`0x038` | `MODEL_*`, `METADATA_*` | Staging, validation, atomic activation, and metadata aperture |
+| `0x03C` | `RUNTIME_ERROR` | Failing layer and runtime error code |
+| `0x040`-`0x04C` | `ACTIVE_*`, `CURRENT_*`, `COMPLETED_*` | Tensor, tile, layer, and tile progress |
+| `0x050` | `PACKET_ERRORS` | Packed parser error count |
+| `0x054` | `PARAMETER_BANKS` | Valid reusable parameter banks |
+| `0x058`-`0x064` | `INPUT_DDR`, `OUTPUT_DDR` | Active tensor DDR offsets |
+| `0x068` | `SATURATION_EVENTS` | Requantization and residual clipping events |
+| `0x0FC` | `VERSION` | Register-map version, `0x00050001` |
 
 ## Software Interaction
 
-The bare-metal app:
-
-1. Verifies the register version and fixed-bitstream capability profile.
-2. Resets AXI DMA.
-3. Clears the accelerator.
-4. Programs image dimensions and residual mode.
-5. Starts S2MM and MM2S DMA channels.
-6. Pulses `CONTROL.start`.
-7. Sends seven tensor packets through MM2S.
-8. Receives output pixels through S2MM.
-9. Polls DMA and status completion.
-10. Prints diagnostics and performance counters.
-11. Compares DDR output against generated Python golden tensors.
-
-Expected board result:
-
-```text
-[PASS] image-to-image DMA golden test passed
-```
+The production bare-metal runtime will load a package into DDR, stage and
+validate metadata, atomically activate the model, refill reusable parameter
+banks, gather halo-aware input/residual tiles, submit packed DMA transfers,
+scatter output tiles, maintain caches, and recover from DMA or accelerator
+timeouts. The existing fixed-network application remains regression evidence;
+programmable gather/scatter software is the next board-facing milestone.

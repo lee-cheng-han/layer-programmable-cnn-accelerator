@@ -25,6 +25,7 @@ module tb_tiled_multi_layer_controller;
   logic [15:0] descriptor_input_tensor_id;
   logic [15:0] descriptor_output_tensor_id;
   logic [15:0] descriptor_residual_tensor_id;
+  logic [15:0] descriptor_quantization_id;
   logic [15:0] descriptor_input_width;
   logic [15:0] descriptor_input_height;
   logic [15:0] descriptor_input_channels;
@@ -55,6 +56,19 @@ module tb_tiled_multi_layer_controller;
   logic [31:0] descriptor_output_row_stride;
   logic [31:0] descriptor_output_pixel_stride;
   logic [31:0] descriptor_output_channel_stride;
+  logic [15:0] descriptor_output_tensor_quantization_id;
+  logic descriptor_residual_tensor_valid;
+  logic [15:0] descriptor_residual_width;
+  logic [15:0] descriptor_residual_height;
+  logic [15:0] descriptor_residual_channels;
+  logic [15:0] descriptor_residual_quantization_id;
+  logic [63:0] descriptor_residual_ddr_offset;
+  logic descriptor_quantization_valid;
+  logic [15:0] descriptor_quantization_channel_count;
+  logic [7:0] descriptor_rounding_mode;
+  logic signed [7:0] descriptor_output_zero_point;
+  logic signed [31:0] descriptor_quant_multiplier [MAX_COUT];
+  logic [5:0] descriptor_quant_shift [MAX_COUT];
   logic bad_chain;
 
   logic parameter_request;
@@ -111,6 +125,7 @@ module tb_tiled_multi_layer_controller;
   logic [15:0] current_tile_y;
   logic [31:0] completed_layer_count;
   logic [31:0] completed_tile_count;
+  logic [31:0] saturation_event_count;
   logic layer_done;
   logic busy;
   logic done;
@@ -146,6 +161,7 @@ module tb_tiled_multi_layer_controller;
     descriptor_output_tensor_id =
       (descriptor_layer_index == 0) ? 16'd1 : 16'd2;
     descriptor_residual_tensor_id = NO_TENSOR_ID;
+    descriptor_quantization_id = 16'd0;
     descriptor_input_width = 16'd3;
     descriptor_input_height = 16'd2;
     descriptor_input_channels = 16'd1;
@@ -179,9 +195,22 @@ module tb_tiled_multi_layer_controller;
     descriptor_output_row_stride = 32'd3;
     descriptor_output_pixel_stride = 32'd1;
     descriptor_output_channel_stride = 32'd1;
+    descriptor_output_tensor_quantization_id = 16'd0;
+    descriptor_residual_tensor_valid = 1'b0;
+    descriptor_residual_width = '0;
+    descriptor_residual_height = '0;
+    descriptor_residual_channels = '0;
+    descriptor_residual_quantization_id = '0;
+    descriptor_residual_ddr_offset = '0;
+    descriptor_quantization_valid = 1'b1;
+    descriptor_quantization_channel_count = 16'd1;
+    descriptor_rounding_mode = ROUND_HALF_TO_EVEN;
+    descriptor_output_zero_point = 8'sd0;
 
     for (int channel = 0; channel < MAX_COUT; channel++) begin
       parameter_bias[channel] = '0;
+      descriptor_quant_multiplier[channel] = 32'sd1;
+      descriptor_quant_shift[channel] = '0;
     end
   end
 

@@ -9,7 +9,9 @@ module cnn_metadata_word_ram #(
   input  logic [ADDR_WIDTH-1:0] write_address,
   input  logic [31:0]           write_data,
   input  logic [ADDR_WIDTH-1:0] read_address,
-  output logic [31:0]           read_data
+  output logic [31:0]           read_data,
+  input  logic [ADDR_WIDTH-1:0] execution_read_address,
+  output logic [31:0]           execution_read_data
 );
   logic [31:0] memory [0:DEPTH-1];
 
@@ -18,5 +20,6 @@ module cnn_metadata_word_ram #(
       memory[write_address] <= write_data;
     end
     read_data <= memory[read_address];
+    execution_read_data <= memory[execution_read_address];
   end
 endmodule

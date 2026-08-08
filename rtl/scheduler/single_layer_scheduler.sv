@@ -34,6 +34,10 @@ module single_layer_scheduler #(
   input  logic relu_enable,
   input  logic quant_enable,
   input  logic [4:0] quant_shift,
+  input  logic per_channel_quant_enable,
+  input  logic signed [31:0] quant_multiplier [MAX_COUT],
+  input  logic [5:0] per_channel_quant_shift [MAX_COUT],
+  input  logic signed [7:0] output_zero_point,
 
   input  logic signed [DATA_W-1:0] activation [MAX_PIXELS*MAX_CIN],
   input  logic signed [DATA_W-1:0] weights_1x1 [MAX_COUT][MAX_CIN],
@@ -60,6 +64,7 @@ module single_layer_scheduler #(
   output logic [COUNT_W-1:0] output_pixel_channels,
   output logic signed [OUT_W-1:0] output_pixel_data [MAX_COUT],
   output logic output_pixel_last,
+  output logic [31:0] output_pixel_saturation_count,
   output logic [DIM_W-1:0] current_x,
   output logic [DIM_W-1:0] current_y,
   output logic busy,
@@ -90,6 +95,8 @@ module single_layer_scheduler #(
   logic done_3x3;
   logic busy_1x1;
   logic busy_3x3;
+  logic [31:0] saturation_count_1x1;
+  logic [31:0] saturation_count_3x3;
 
   logic signed [DATA_W-1:0] activation_1x1 [MAX_CIN];
   logic signed [OUT_W-1:0] output_1x1 [MAX_COUT];
@@ -149,6 +156,8 @@ module single_layer_scheduler #(
     (state == S_WRITE_PIXEL) &&
     ((out_x + DIM_W'(1)) >= output_width) &&
     ((out_y + DIM_W'(1)) >= output_height);
+  assign output_pixel_saturation_count =
+    (kernel_size == 2'd1) ? saturation_count_1x1 : saturation_count_3x3;
 
   always_comb begin
     case (stride)
@@ -197,6 +206,10 @@ module single_layer_scheduler #(
     .relu_enable(relu_enable),
     .quant_enable(quant_enable),
     .quant_shift(quant_shift),
+    .per_channel_quant_enable(per_channel_quant_enable),
+    .quant_multiplier(quant_multiplier),
+    .per_channel_quant_shift(per_channel_quant_shift),
+    .output_zero_point(output_zero_point),
     .activation(activation_1x1),
     .weights(weights_1x1),
     .bias(bias),
@@ -214,6 +227,7 @@ module single_layer_scheduler #(
     .scratch_weight_in_lane_mask(scratch_weight_in_lane_mask_1x1),
     .scratch_weight_mat_data(scratch_weight_mat_data),
     .output_data(output_1x1),
+    .saturation_event_count(saturation_count_1x1),
     .busy(busy_1x1),
     .done(done_1x1)
   );
@@ -248,6 +262,10 @@ module single_layer_scheduler #(
     .relu_enable(relu_enable),
     .quant_enable(quant_enable),
     .quant_shift(quant_shift),
+    .per_channel_quant_enable(per_channel_quant_enable),
+    .quant_multiplier(quant_multiplier),
+    .per_channel_quant_shift(per_channel_quant_shift),
+    .output_zero_point(output_zero_point),
     .activation(activation),
     .weights(weights_3x3),
     .bias(bias),
@@ -264,6 +282,7 @@ module single_layer_scheduler #(
     .scratch_weight_in_lane_mask(scratch_weight_in_lane_mask_3x3),
     .scratch_weight_mat_data(scratch_weight_mat_data),
     .output_data(output_3x3),
+    .saturation_event_count(saturation_count_3x3),
     .busy(busy_3x3),
     .done(done_3x3)
   );

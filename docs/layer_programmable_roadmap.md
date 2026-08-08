@@ -21,7 +21,7 @@ atomically activated, and reused across multiple images.
 | 6 | Add reusable active/prefetch parameter banks | Complete |
 | 7 | Introduce packed, versioned DMA protocol | Complete |
 | 8 | Implement DDR-backed spatial tiling and halo handling | RTL complete through integrated software-managed tile interface |
-| 9 | Complete residual and quantization behavior in runtime RTL | Planned |
+| 9 | Complete residual and quantization behavior in runtime RTL | Complete |
 | 10 | Build runtime software and connect interrupts | AXI-Lite and board interrupt wiring complete; runtime software pending |
 | 11 | Add autonomous DDR fetching | Planned |
 | 12 | Expand protocol, randomized, golden, and negative verification | Planned |
@@ -78,6 +78,15 @@ Software DDR gather/scatter, board integration, and randomized multi-layer
 payload coverage remain. The planner itself has deterministic randomized
 geometry coverage. See [tiled_execution.md](tiled_execution.md).
 
+Phase 9 now resolves each active layer's quantization descriptor, supplies
+per-output-channel signed multipliers, shifts, and zero points to a pipelined
+round-half-to-even requantizer, and counts positive and negative INT8 clipping
+events. Final-layer residual add and subtract consume a second packed tile,
+operate on two post-requantization signed INT8 operands, and saturate the
+result. Directed standalone and integrated runtime tests cover ties, channel
+scales, lane tails, positive/negative clipping, residual modes, and saturation
+counter readback.
+
 The integrated programmable runtime top now closes the active metadata
 store, packed parser/router, CRC-checked reusable parameter banks, and tiled
 multi-layer controller into one synthesizable data path. Its golden test loads
@@ -96,7 +105,7 @@ documented interface or an isolated module.
 | Priority | Improvement | Current state | Completion gate |
 |---:|---|---|---|
 | 1 | Converge on one production architecture | In progress; programmable runtime selected by the Zybo block design | Legacy execution RTL and software are retired after programmable bare-metal regression parity |
-| 2 | Complete per-channel quantization | Partial | Active quantization descriptors drive per-output-channel multiplier/shift, round-half-to-even, saturation, and zero-point checks through the integrated tiled runtime |
+| 2 | Complete per-channel quantization | Implemented | Active quantization descriptors drive per-output-channel multiplier/shift, round-half-to-even, saturation, and zero-point checks through the integrated tiled runtime |
 | 3 | Implement DDR tile scheduling | RTL interface implemented; software pending | Bare-metal software gathers clipped NHWC source rectangles, submits DMA packets, scatters outputs, manages intermediate tensors and caches, and times out safely |
 | 4 | Strengthen integrated verification | Partial | Deterministic randomized 1-8-layer package-to-output tests cover mixed kernels, strides, padding, tails, backpressure, partial beats, CRC faults, malformed packets, and model replacement |
 | 5 | Improve structured error propagation | Partial | First-failure records identify subsystem, model generation, layer, tensor, tile, field, observed value, and expected range for every programmable-runtime failure |
@@ -111,9 +120,9 @@ documented interface or an isolated module.
 - The integrated programmable runtime already closes atomic metadata,
   descriptor-derived parameter CRC validation, packed DMA routing, reusable
   banks, tiled execution, and packed output.
-- The compiler, package executor, ABI records, and standalone requantizer
-  already implement per-output-channel fixed-point math and round-half-to-even.
-  The remaining quantization work is integration, not specification.
+- The compiler, package executor, ABI records, metadata store, and integrated
+  tiled runtime implement per-output-channel fixed-point math,
+  round-half-to-even, zero points, signed saturation, and clipping counters.
 - Directed and deterministic-randomized geometry, halo, protocol, controller,
   parameter-bank, and golden-network tests already provide the base for the
   expanded randomized campaign.
@@ -133,16 +142,13 @@ documented interface or an isolated module.
 2. **DDR-backed runtime software:** load active packages and parameters, gather
    halo-aware tiles, operate AXI DMA, scatter outputs, maintain caches, and
    recover from timeouts.
-3. **Numeric-path completion:** connect per-channel quantization descriptors,
-   residual add/subtract, saturation behavior, and saturation counters to the
-   integrated runtime.
-4. **Verification and diagnostics hardening:** add randomized multi-layer
+3. **Verification and diagnostics hardening:** add randomized multi-layer
    package flows, fault recovery, structured programmable errors, and detailed
    performance counters.
-5. **Programmable board implementation closure:** carry the closed programmable
+4. **Programmable board implementation closure:** carry the closed programmable
    PL top into the Zynq block design, rerun full-board timing, and generate the
    final bitstream/XSA/BOOT.BIN baseline.
-6. **Physical-board validation and demonstration:** capture correctness,
+5. **Physical-board validation and demonstration:** capture correctness,
    UART/ILA/device evidence, and measured 224x224/512x512 performance.
 
 ## Final Workflow

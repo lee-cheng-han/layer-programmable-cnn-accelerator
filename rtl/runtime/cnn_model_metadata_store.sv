@@ -3,7 +3,8 @@
 module cnn_model_metadata_store #(
   parameter int MAX_LAYERS = 8,
   parameter int MAX_TENSORS = 32,
-  parameter int MAX_QUANTIZATIONS = 32
+  parameter int MAX_QUANTIZATIONS = 32,
+  parameter int MAX_CHANNELS = 16
 )(
   input  logic        clk,
   input  logic        resetn,
@@ -67,6 +68,19 @@ module cnn_model_metadata_store #(
   output logic [31:0] execution_output_row_stride,
   output logic [31:0] execution_output_pixel_stride,
   output logic [31:0] execution_output_channel_stride,
+  output logic [15:0] execution_output_tensor_quantization_id,
+  output logic        execution_residual_tensor_valid,
+  output logic [15:0] execution_residual_width,
+  output logic [15:0] execution_residual_height,
+  output logic [15:0] execution_residual_channels,
+  output logic [15:0] execution_residual_quantization_id,
+  output logic [63:0] execution_residual_ddr_offset,
+  output logic        execution_quantization_valid,
+  output logic [15:0] execution_quantization_channel_count,
+  output logic [7:0]  execution_rounding_mode,
+  output logic signed [7:0] execution_output_zero_point,
+  output logic signed [31:0] execution_quant_multiplier [MAX_CHANNELS],
+  output logic [5:0]  execution_quant_shift [MAX_CHANNELS],
 
   output logic [2:0]  staging_state,
   output logic        staging_bank,
@@ -116,6 +130,8 @@ module cnn_model_metadata_store #(
   logic [31:0] layer_read_data;
   logic [31:0] tensor_read_data;
   logic [31:0] quant_read_data;
+  logic [$clog2(QUANT_DEPTH)-1:0] quant_execution_read_address;
+  logic [31:0] quant_execution_read_data;
 
   logic [31:0] cached_magic [0:1];
   logic [31:0] cached_version_size [0:1];
@@ -143,6 +159,7 @@ module cnn_model_metadata_store #(
   logic [31:0] cached_tensor_allocation_size [0:1][0:MAX_TENSORS-1];
   logic [31:0] cached_tensor_geometry [0:1][0:MAX_TENSORS-1];
   logic [31:0] cached_tensor_channels [0:1][0:MAX_TENSORS-1];
+  logic [31:0] cached_tensor_quantization [0:1][0:MAX_TENSORS-1];
   logic [31:0] cached_tensor_row_stride [0:1][0:MAX_TENSORS-1];
   logic [31:0] cached_tensor_pixel_stride [0:1][0:MAX_TENSORS-1];
   logic [31:0] cached_tensor_channel_stride [0:1][0:MAX_TENSORS-1];
@@ -187,6 +204,7 @@ module cnn_model_metadata_store #(
     logic valid;
     logic [31:0] geometry;
     logic [31:0] channels;
+    logic [15:0] quantization_id;
     logic [63:0] ddr_offset;
     logic [31:0] allocation_size;
     logic [31:0] row_stride;
@@ -198,6 +216,45 @@ module cnn_model_metadata_store #(
   execution_layer_lookup_t execution_layer_lookup_qq;
   execution_tensor_lookup_t execution_input_tensor_lookup_q [0:1];
   execution_tensor_lookup_t execution_output_tensor_lookup_q [0:1];
+  execution_tensor_lookup_t execution_residual_tensor_lookup_q [0:1];
+
+  typedef enum logic [2:0] {
+    Q_IDLE,
+    Q_WAIT_HEADER,
+    Q_CAPTURE_HEADER,
+    Q_WAIT_ENTRY,
+    Q_CAPTURE_ENTRY,
+    Q_DONE
+  } quant_lookup_state_t;
+
+  quant_lookup_state_t quant_lookup_state;
+  logic quant_lookup_done;
+  logic quant_lookup_valid;
+  logic quant_lookup_bank;
+  logic [15:0] quant_lookup_id;
+  logic [5:0] quant_lookup_word;
+  logic [4:0] quant_lookup_channel;
+  logic [31:0] quant_header_word [0:2];
+  logic signed [31:0] quant_multiplier_q [MAX_CHANNELS];
+  logic [5:0] quant_shift_q [MAX_CHANNELS];
+
+  function automatic logic [$clog2(QUANT_DEPTH)-1:0] quant_execution_address(
+    input logic bank,
+    input logic [15:0] quantization_id,
+    input logic [5:0] word_index
+  );
+    logic [$clog2(QUANT_DEPTH)-1:0] bank_offset;
+    logic [$clog2(QUANT_DEPTH)-1:0] record_offset;
+    begin
+      bank_offset = bank ?
+        $clog2(QUANT_DEPTH)'(MAX_QUANTIZATIONS * QUANT_WORDS) : '0;
+      record_offset =
+        ($clog2(QUANT_DEPTH)'(quantization_id) << 5) +
+        ($clog2(QUANT_DEPTH)'(quantization_id) << 4);
+      quant_execution_address = bank_offset + record_offset +
+        $clog2(QUANT_DEPTH)'(word_index);
+    end
+  endfunction
 
   always_ff @(posedge clk or negedge resetn) begin
     int unsigned layer_slot;
@@ -243,19 +300,23 @@ module cnn_model_metadata_store #(
   always_ff @(posedge clk or negedge resetn) begin
     int unsigned input_slot;
     int unsigned output_slot;
+    int unsigned residual_slot;
     if (!resetn) begin
       execution_layer_lookup_qq <= '0;
       for (int bank = 0; bank < 2; bank++) begin
         execution_input_tensor_lookup_q[bank] <= '0;
         execution_output_tensor_lookup_q[bank] <= '0;
+        execution_residual_tensor_lookup_q[bank] <= '0;
       end
     end else begin
       execution_layer_lookup_qq <= execution_layer_lookup_q;
       input_slot = int'(execution_layer_lookup_q.tensor_ids[15:0]);
       output_slot = int'(execution_layer_lookup_q.tensor_ids[31:16]);
+      residual_slot = int'(execution_layer_lookup_q.residual_quant[15:0]);
       for (int bank = 0; bank < 2; bank++) begin
         execution_input_tensor_lookup_q[bank] <= '0;
         execution_output_tensor_lookup_q[bank] <= '0;
+        execution_residual_tensor_lookup_q[bank] <= '0;
         if (execution_layer_lookup_q.valid &&
             (input_slot < MAX_TENSORS) &&
             (output_slot < MAX_TENSORS) &&
@@ -266,6 +327,8 @@ module cnn_model_metadata_store #(
             cached_tensor_geometry[bank][input_slot];
           execution_input_tensor_lookup_q[bank].channels <=
             cached_tensor_channels[bank][input_slot];
+          execution_input_tensor_lookup_q[bank].quantization_id <=
+            cached_tensor_quantization[bank][input_slot][15:0];
           execution_input_tensor_lookup_q[bank].ddr_offset <=
             cached_tensor_ddr_offset[bank][input_slot];
           execution_input_tensor_lookup_q[bank].allocation_size <=
@@ -281,6 +344,8 @@ module cnn_model_metadata_store #(
             cached_tensor_geometry[bank][output_slot];
           execution_output_tensor_lookup_q[bank].channels <=
             cached_tensor_channels[bank][output_slot];
+          execution_output_tensor_lookup_q[bank].quantization_id <=
+            cached_tensor_quantization[bank][output_slot][15:0];
           execution_output_tensor_lookup_q[bank].ddr_offset <=
             cached_tensor_ddr_offset[bank][output_slot];
           execution_output_tensor_lookup_q[bank].allocation_size <=
@@ -292,7 +357,173 @@ module cnn_model_metadata_store #(
           execution_output_tensor_lookup_q[bank].channel_stride <=
             cached_tensor_channel_stride[bank][output_slot];
         end
+        if (execution_layer_lookup_q.valid &&
+            (execution_layer_lookup_q.postprocess[31:24] != RESIDUAL_NONE) &&
+            (residual_slot < MAX_TENSORS) &&
+            (residual_slot < int'(execution_layer_lookup_q.tensor_count))) begin
+          execution_residual_tensor_lookup_q[bank].valid <= 1'b1;
+          execution_residual_tensor_lookup_q[bank].geometry <=
+            cached_tensor_geometry[bank][residual_slot];
+          execution_residual_tensor_lookup_q[bank].channels <=
+            cached_tensor_channels[bank][residual_slot];
+          execution_residual_tensor_lookup_q[bank].quantization_id <=
+            cached_tensor_quantization[bank][residual_slot][15:0];
+          execution_residual_tensor_lookup_q[bank].ddr_offset <=
+            cached_tensor_ddr_offset[bank][residual_slot];
+          execution_residual_tensor_lookup_q[bank].allocation_size <=
+            cached_tensor_allocation_size[bank][residual_slot];
+          execution_residual_tensor_lookup_q[bank].row_stride <=
+            cached_tensor_row_stride[bank][residual_slot];
+          execution_residual_tensor_lookup_q[bank].pixel_stride <=
+            cached_tensor_pixel_stride[bank][residual_slot];
+          execution_residual_tensor_lookup_q[bank].channel_stride <=
+            cached_tensor_channel_stride[bank][residual_slot];
+        end
       end
+    end
+  end
+
+  always_comb begin
+    execution_quantization_valid =
+      quant_lookup_done && quant_lookup_valid &&
+      execution_layer_lookup_qq.valid &&
+      (quant_lookup_bank == execution_layer_lookup_qq.bank) &&
+      (quant_lookup_id == execution_layer_lookup_qq.residual_quant[31:16]);
+    execution_quantization_channel_count = quant_header_word[2][15:0];
+    execution_rounding_mode = quant_header_word[2][23:16];
+    execution_output_zero_point = quant_header_word[2][31:24];
+    for (int channel = 0; channel < MAX_CHANNELS; channel++) begin
+      execution_quant_multiplier[channel] = quant_multiplier_q[channel];
+      execution_quant_shift[channel] = quant_shift_q[channel];
+    end
+  end
+
+  always_ff @(posedge clk or negedge resetn) begin
+    logic [15:0] requested_quant_id;
+    logic [15:0] requested_channel_count;
+    if (!resetn) begin
+      quant_lookup_state <= Q_IDLE;
+      quant_lookup_done <= 1'b0;
+      quant_lookup_valid <= 1'b0;
+      quant_lookup_bank <= 1'b0;
+      quant_lookup_id <= '0;
+      quant_lookup_word <= '0;
+      quant_lookup_channel <= '0;
+      quant_execution_read_address <= '0;
+      for (int word = 0; word < 3; word++) begin
+        quant_header_word[word] <= '0;
+      end
+      for (int channel = 0; channel < MAX_CHANNELS; channel++) begin
+        quant_multiplier_q[channel] <= '0;
+        quant_shift_q[channel] <= '0;
+      end
+    end else begin
+      requested_quant_id = execution_layer_lookup_qq.residual_quant[31:16];
+      requested_channel_count =
+        execution_output_tensor_lookup_q[
+          execution_layer_lookup_qq.bank].channels[15:0];
+
+      unique case (quant_lookup_state)
+        Q_IDLE: begin
+          if (execution_layer_lookup_qq.valid) begin
+            quant_lookup_done <= 1'b0;
+            quant_lookup_valid <= 1'b1;
+            quant_lookup_bank <= execution_layer_lookup_qq.bank;
+            quant_lookup_id <= requested_quant_id;
+            quant_lookup_word <= 6'd0;
+            quant_lookup_channel <= '0;
+            quant_execution_read_address <= quant_execution_address(
+              execution_layer_lookup_qq.bank, requested_quant_id, 6'd0);
+            for (int channel = 0; channel < MAX_CHANNELS; channel++) begin
+              quant_multiplier_q[channel] <= '0;
+              quant_shift_q[channel] <= '0;
+            end
+            if ((requested_quant_id >= 16'(MAX_QUANTIZATIONS)) ||
+                (requested_quant_id >=
+                 cached_counts1[execution_layer_lookup_qq.bank][15:0]) ||
+                (requested_channel_count == 0) ||
+                (requested_channel_count > 16'(MAX_CHANNELS))) begin
+              quant_lookup_valid <= 1'b0;
+              quant_lookup_done <= 1'b1;
+              quant_lookup_state <= Q_DONE;
+            end else begin
+              quant_lookup_state <= Q_WAIT_HEADER;
+            end
+          end
+        end
+
+        Q_WAIT_HEADER: quant_lookup_state <= Q_CAPTURE_HEADER;
+
+        Q_CAPTURE_HEADER: begin
+          quant_header_word[quant_lookup_word[1:0]] <=
+            quant_execution_read_data;
+          if (quant_lookup_word < 6'd2) begin
+            quant_lookup_word <= quant_lookup_word + 6'd1;
+            quant_execution_read_address <= quant_execution_address(
+              quant_lookup_bank, quant_lookup_id, quant_lookup_word + 6'd1);
+            quant_lookup_state <= Q_WAIT_HEADER;
+          end else begin
+            if ((quant_header_word[0] !=
+                 {16'(QUANT_DESCRIPTOR_BYTES), 16'(ABI_VERSION)}) ||
+                (quant_header_word[1][15:0] != quant_lookup_id) ||
+                (quant_header_word[1][31:16] != 0) ||
+                (quant_execution_read_data[15:0] != requested_channel_count) ||
+                (quant_execution_read_data[15:0] == 0) ||
+                (quant_execution_read_data[15:0] > 16'(MAX_CHANNELS)) ||
+                (quant_execution_read_data[23:16] != ROUND_HALF_TO_EVEN) ||
+                ($signed(quant_execution_read_data[31:24]) != 0)) begin
+              quant_lookup_valid <= 1'b0;
+            end
+            quant_lookup_word <= 6'd16;
+            quant_execution_read_address <= quant_execution_address(
+              quant_lookup_bank, quant_lookup_id, 6'd16);
+            quant_lookup_state <= Q_WAIT_ENTRY;
+          end
+        end
+
+        Q_WAIT_ENTRY: quant_lookup_state <= Q_CAPTURE_ENTRY;
+
+        Q_CAPTURE_ENTRY: begin
+          if (!quant_lookup_word[0]) begin
+            quant_multiplier_q[quant_lookup_channel[3:0]] <=
+              $signed(quant_execution_read_data);
+            quant_lookup_word <= quant_lookup_word + 6'd1;
+            quant_execution_read_address <= quant_execution_address(
+              quant_lookup_bank, quant_lookup_id, quant_lookup_word + 6'd1);
+            quant_lookup_state <= Q_WAIT_ENTRY;
+          end else begin
+            quant_shift_q[quant_lookup_channel[3:0]] <=
+              quant_execution_read_data[5:0];
+            if ((quant_multiplier_q[quant_lookup_channel[3:0]] <= 0) ||
+                (quant_execution_read_data[7:0] > 8'd62) ||
+                (quant_execution_read_data[31:8] != 0)) begin
+              quant_lookup_valid <= 1'b0;
+            end
+            if (16'(quant_lookup_channel) + 16'd1 >=
+                quant_header_word[2][15:0]) begin
+              quant_lookup_done <= 1'b1;
+              quant_lookup_state <= Q_DONE;
+            end else begin
+              quant_lookup_channel <= quant_lookup_channel + 5'd1;
+              quant_lookup_word <= quant_lookup_word + 6'd1;
+              quant_execution_read_address <= quant_execution_address(
+                quant_lookup_bank, quant_lookup_id, quant_lookup_word + 6'd1);
+              quant_lookup_state <= Q_WAIT_ENTRY;
+            end
+          end
+        end
+
+        Q_DONE: begin
+          if (!execution_layer_lookup_qq.valid ||
+              (quant_lookup_bank != execution_layer_lookup_qq.bank) ||
+              (quant_lookup_id != requested_quant_id)) begin
+            quant_lookup_done <= 1'b0;
+            quant_lookup_state <= Q_IDLE;
+          end
+        end
+
+        default: quant_lookup_state <= Q_IDLE;
+      endcase
     end
   end
 
@@ -340,6 +571,13 @@ module cnn_model_metadata_store #(
       execution_output_row_stride <= 32'd0;
       execution_output_pixel_stride <= 32'd0;
       execution_output_channel_stride <= 32'd0;
+      execution_output_tensor_quantization_id <= 16'd0;
+      execution_residual_tensor_valid <= 1'b0;
+      execution_residual_width <= 16'd0;
+      execution_residual_height <= 16'd0;
+      execution_residual_channels <= 16'd0;
+      execution_residual_quantization_id <= 16'd0;
+      execution_residual_ddr_offset <= 64'd0;
     end else begin
       execution_descriptor_valid <= 1'b0;
       execution_layer_id <= execution_layer_lookup_qq.identity[15:0];
@@ -387,13 +625,26 @@ module cnn_model_metadata_store #(
       execution_output_row_stride <= 32'd0;
       execution_output_pixel_stride <= 32'd0;
       execution_output_channel_stride <= 32'd0;
+      execution_output_tensor_quantization_id <= 16'd0;
+      execution_residual_tensor_valid <= 1'b0;
+      execution_residual_width <= 16'd0;
+      execution_residual_height <= 16'd0;
+      execution_residual_channels <= 16'd0;
+      execution_residual_quantization_id <= 16'd0;
+      execution_residual_ddr_offset <= 64'd0;
 
       if (execution_layer_lookup_qq.valid &&
           active_valid &&
           (execution_layer_lookup_qq.bank == active_bank) &&
           (execution_layer_lookup_qq.layer_index == execution_layer_index) &&
+          quant_lookup_done &&
+          (quant_lookup_bank == execution_layer_lookup_qq.bank) &&
+          (quant_lookup_id == execution_layer_lookup_qq.residual_quant[31:16]) &&
           execution_input_tensor_lookup_q[execution_layer_lookup_qq.bank].valid &&
-          execution_output_tensor_lookup_q[execution_layer_lookup_qq.bank].valid) begin
+          execution_output_tensor_lookup_q[execution_layer_lookup_qq.bank].valid &&
+          ((execution_layer_lookup_qq.postprocess[31:24] == RESIDUAL_NONE) ||
+           execution_residual_tensor_lookup_q[
+             execution_layer_lookup_qq.bank].valid)) begin
         execution_input_width <=
           execution_input_tensor_lookup_q[
             execution_layer_lookup_qq.bank].geometry[15:0];
@@ -442,6 +693,29 @@ module cnn_model_metadata_store #(
         execution_output_channel_stride <=
           execution_output_tensor_lookup_q[
             execution_layer_lookup_qq.bank].channel_stride;
+        execution_output_tensor_quantization_id <=
+          execution_output_tensor_lookup_q[
+            execution_layer_lookup_qq.bank].quantization_id;
+        if (execution_layer_lookup_qq.postprocess[31:24] != RESIDUAL_NONE) begin
+          execution_residual_tensor_valid <=
+            execution_residual_tensor_lookup_q[
+              execution_layer_lookup_qq.bank].valid;
+          execution_residual_width <=
+            execution_residual_tensor_lookup_q[
+              execution_layer_lookup_qq.bank].geometry[15:0];
+          execution_residual_height <=
+            execution_residual_tensor_lookup_q[
+              execution_layer_lookup_qq.bank].geometry[31:16];
+          execution_residual_channels <=
+            execution_residual_tensor_lookup_q[
+              execution_layer_lookup_qq.bank].channels[15:0];
+          execution_residual_quantization_id <=
+            execution_residual_tensor_lookup_q[
+              execution_layer_lookup_qq.bank].quantization_id;
+          execution_residual_ddr_offset <=
+            execution_residual_tensor_lookup_q[
+              execution_layer_lookup_qq.bank].ddr_offset;
+        end
         execution_descriptor_valid <= 1'b1;
       end
     end
@@ -499,7 +773,9 @@ module cnn_model_metadata_store #(
     .write_address(header_read_address_q),
     .write_data(metadata_write_data_q),
     .read_address(header_read_address_q),
-    .read_data(header_read_data)
+    .read_data(header_read_data),
+    .execution_read_address('0),
+    .execution_read_data()
   );
 
   cnn_metadata_word_ram #(
@@ -511,7 +787,9 @@ module cnn_model_metadata_store #(
     .write_address(layer_read_address_q),
     .write_data(metadata_write_data_q),
     .read_address(layer_read_address_q),
-    .read_data(layer_read_data)
+    .read_data(layer_read_data),
+    .execution_read_address('0),
+    .execution_read_data()
   );
 
   cnn_metadata_word_ram #(
@@ -523,7 +801,9 @@ module cnn_model_metadata_store #(
     .write_address(tensor_read_address_q),
     .write_data(metadata_write_data_q),
     .read_address(tensor_read_address_q),
-    .read_data(tensor_read_data)
+    .read_data(tensor_read_data),
+    .execution_read_address('0),
+    .execution_read_data()
   );
 
   cnn_metadata_word_ram #(
@@ -535,7 +815,9 @@ module cnn_model_metadata_store #(
     .write_address(quant_read_address_q),
     .write_data(metadata_write_data_q),
     .read_address(quant_read_address_q),
-    .read_data(quant_read_data)
+    .read_data(quant_read_data),
+    .execution_read_address(quant_execution_read_address),
+    .execution_read_data(quant_execution_read_data)
   );
 
   always_comb begin
@@ -766,6 +1048,8 @@ module cnn_model_metadata_store #(
                 5: cached_tensor_geometry[staging_bank][TENSOR_INDEX_W'(metadata_record_index)] <=
                      metadata_write_data;
                 6: cached_tensor_channels[staging_bank][TENSOR_INDEX_W'(metadata_record_index)] <=
+                     metadata_write_data;
+                7: cached_tensor_quantization[staging_bank][TENSOR_INDEX_W'(metadata_record_index)] <=
                      metadata_write_data;
                 9: cached_tensor_row_stride[staging_bank][TENSOR_INDEX_W'(metadata_record_index)] <=
                      metadata_write_data;

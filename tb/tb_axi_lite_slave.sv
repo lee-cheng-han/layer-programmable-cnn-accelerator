@@ -439,12 +439,17 @@ module tb_axi_lite_slave;
  axi_metadata_commit(1, 0);
  axi_metadata_write(2, 0, 0, 32'h0040_0001);
  axi_metadata_write(2, 0, 1, 32'h0001_0000);
+ axi_metadata_write(2, 0, 7, 32'd0);
  axi_metadata_commit(2, 0);
  axi_metadata_write(2, 1, 0, 32'h0040_0001);
  axi_metadata_write(2, 1, 1, 32'h0002_0001);
+ axi_metadata_write(2, 1, 7, 32'd0);
  axi_metadata_commit(2, 1);
  axi_metadata_write(3, 0, 0, 32'h00C0_0001);
  axi_metadata_write(3, 0, 1, 32'h0000_0000);
+ axi_metadata_write(3, 0, 2, 32'h0001_0001);
+ axi_metadata_write(3, 0, 16, 32'd1);
+ axi_metadata_write(3, 0, 17, 32'd0);
  axi_metadata_commit(3, 0);
 
  axi_read(ADDR_STAGING_MODEL_ID, rd, resp);

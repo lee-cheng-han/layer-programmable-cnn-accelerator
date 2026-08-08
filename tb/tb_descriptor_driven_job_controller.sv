@@ -147,6 +147,19 @@ module tb_descriptor_driven_job_controller;
     .execution_output_row_stride(),
     .execution_output_pixel_stride(),
     .execution_output_channel_stride(),
+    .execution_output_tensor_quantization_id(),
+    .execution_residual_tensor_valid(),
+    .execution_residual_width(),
+    .execution_residual_height(),
+    .execution_residual_channels(),
+    .execution_residual_quantization_id(),
+    .execution_residual_ddr_offset(),
+    .execution_quantization_valid(),
+    .execution_quantization_channel_count(),
+    .execution_rounding_mode(),
+    .execution_output_zero_point(),
+    .execution_quant_multiplier(),
+    .execution_quant_shift(),
     .staging_state(staging_state),
     .staging_bank(),
     .active_valid(active_valid),
@@ -346,6 +359,7 @@ module tb_descriptor_driven_job_controller;
       write_word(METADATA_TENSOR, tensor_id, 1, 32'(tensor_id));
       write_word(METADATA_TENSOR, tensor_id, 5, {16'(height), 16'(width)});
       write_word(METADATA_TENSOR, tensor_id, 6, 32'h0101_0001);
+      write_word(METADATA_TENSOR, tensor_id, 7, 32'd0);
       commit_record(METADATA_TENSOR, tensor_id);
     end
   endtask
@@ -459,6 +473,9 @@ module tb_descriptor_driven_job_controller;
     end
     write_word(METADATA_QUANTIZATION, 0, 0, 32'h00C0_0001);
     write_word(METADATA_QUANTIZATION, 0, 1, 32'd0);
+    write_word(METADATA_QUANTIZATION, 0, 2, 32'h0001_0001);
+    write_word(METADATA_QUANTIZATION, 0, 16, 32'd1);
+    write_word(METADATA_QUANTIZATION, 0, 17, 32'd0);
     commit_record(METADATA_QUANTIZATION, 0);
 
     pulse(1);
@@ -496,6 +513,9 @@ module tb_descriptor_driven_job_controller;
     end
     write_word(METADATA_QUANTIZATION, 0, 0, 32'h00C0_0001);
     write_word(METADATA_QUANTIZATION, 0, 1, 32'd0);
+    write_word(METADATA_QUANTIZATION, 0, 2, 32'h0001_0001);
+    write_word(METADATA_QUANTIZATION, 0, 16, 32'd1);
+    write_word(METADATA_QUANTIZATION, 0, 17, 32'd0);
     commit_record(METADATA_QUANTIZATION, 0);
     pulse(1);
     pulse(2);
@@ -523,6 +543,9 @@ module tb_descriptor_driven_job_controller;
     load_tensor(1, 1, 1);
     write_word(METADATA_QUANTIZATION, 0, 0, 32'h00C0_0001);
     write_word(METADATA_QUANTIZATION, 0, 1, 32'd0);
+    write_word(METADATA_QUANTIZATION, 0, 2, 32'h0001_0001);
+    write_word(METADATA_QUANTIZATION, 0, 16, 32'd1);
+    write_word(METADATA_QUANTIZATION, 0, 17, 32'd0);
     commit_record(METADATA_QUANTIZATION, 0);
     pulse(1);
     pulse(2);

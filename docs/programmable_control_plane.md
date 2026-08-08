@@ -7,7 +7,7 @@
 activate a model, select the descriptor used to validate parameter packets,
 launch a job, and inspect tensor/tile progress without RTL sideband controls.
 
-The register interface version is `0x00050000`. All registers are 32-bit,
+The register interface version is `0x00050001`. All registers are 32-bit,
 little-endian, and naturally aligned.
 
 ## Register Map
@@ -38,7 +38,8 @@ little-endian, and naturally aligned.
 | `0x054` | `PARAMETER_BANKS` | R | valid reusable parameter banks |
 | `0x058`-`0x05C` | `INPUT_DDR` | R | active input tensor DDR offset |
 | `0x060`-`0x064` | `OUTPUT_DDR` | R | active output tensor DDR offset |
-| `0x0FC` | `VERSION` | R | `0x00050000` |
+| `0x068` | `SATURATION_EVENTS` | R | requantization and residual INT8 clipping events in the active job |
+| `0x0FC` | `VERSION` | R | `0x00050001` |
 
 `METADATA_ADDRESS` uses bits `[1:0]` for record kind, `[7:2]` for record
 index, and `[13:8]` for word index. This matches the existing metadata-store

@@ -11,6 +11,7 @@
 | golden generation | `make baremetal-headers` | Passing | writes deterministic tensors and C DMA packet header |
 | compute RTL | `tb_parallel_mac_array` | Covered | PC x PK signed INT8 MAC datapath |
 | post-processing RTL | `tb_parallel_requantizer` | Covered | per-channel multiply/shift, round-half-to-even ties, lane masks, and signed saturation |
+| residual output RTL | `tb_tile_output_serializer_numeric` | Covered | post-quantization INT8 add/subtract, positive/negative saturation, and clipping-event accounting |
 | compute RTL | `tb_tiled_conv1x1_engine` | Covered | array-backed and banked-scratchpad-backed 1x1 operand paths |
 | compute RTL | `tb_tiled_conv3x3_engine` | Covered | array-backed and banked-scratchpad-backed 3x3 operand paths |
 | tensor RTL | `tb_tensor_address_gen` | Covered | stride, padding, and valid/invalid address behavior |
@@ -26,7 +27,8 @@
 | controller RTL | `tb_full_network_golden_flow` | Covered | full 3-layer denoising controller against Python golden tensors |
 | stream RTL | `tb_stream_loaded_full_network_golden_flow` | Covered | packet-loaded full network with output backpressure |
 | AXI stream RTL | `tb_axi_stream_full_network_golden_flow` | Covered | seven-packet AXI job, malformed packet cases, repeated starts, and output compare |
-| implementation | `make full-zybo-z7-flow` | Passing | Zynq block design, bitstream, and XSA generated at 125 MHz |
+| implementation | programmable PL OOC | Passing | default and Explore routes close setup and hold at 125 MHz with the complete numeric path |
+| implementation | `make full-zybo-z7-flow` | Prior baseline passing | regenerate the Zynq bitstream/XSA after Phase 9 before board use |
 | software | `make vitis-app` | Passing | golden tensor AXI DMA app and FSBL build from XSA |
 | boot package | `make boot-image` | Passing | packages `build/BOOT.BIN` |
 | Board | Zybo Z7-20 UART PASS | Pending | requires physical board |
@@ -39,8 +41,8 @@
 | 1x1 convolution | High | tiled engine tests and scheduler tests |
 | 3x3 convolution | High | address generator, tiled engine, scheduler, and full-network golden tests |
 | runtime channel tails | High | directed PC/PK tail cases; V1 intentionally uses no special RGB channel packing |
-| bias, ReLU, quantization, saturation | High standalone; partial integration | Python model and parallel requantizer cover per-channel scales, ties, and clipping; integrated tiled runtime still uses scalar shift configuration |
-| residual numeric domain | High standalone; pending tiled integration | post-requantization signed INT8 add/subtract and saturation are specified and tested outside the integrated tiled runtime |
+| bias, ReLU, quantization, saturation | High pre-board | active per-channel multiplier/shift/zero-point descriptors drive both tiled engines; standalone and integrated tests cover ties, tails, clipping, and counter readback |
+| residual numeric domain | High pre-board | integrated final-layer residual add/subtract uses two post-requantization signed INT8 operands and saturates to INT8 |
 | bandwidth feasibility | Analytical | worked 1024x1024 3x3 and 1x1 budgets in `docs/bandwidth_budget.md` |
 | stream-loaded activations/weights/biases | High | stream-loaded full-network golden flow |
 | seven-packet AXI tensor job | High | AXI stream full-network golden flow |
@@ -54,7 +56,7 @@
 | multi-layer tiled execution | High pre-integration | two-layer packed tile flow through reusable parameters, DDR tensor handoff validation, progress, and negative chain rejection |
 | integrated programmable runtime | High pre-board | atomic model activation, descriptor-derived parameter CRC validation, packed tile ingress, real compute, and packed output in one RTL top |
 | programmable AXI-Lite system | High pre-board | AXI-Lite metadata/lifecycle/launch and progress readback wrapped around CRC-checked packed parameter/tile execution |
-| Zynq block design integration | High fixed baseline; programmable replacement pending | fixed-path bitstream and XSA generated at 125 MHz |
+| Zynq block design integration | Programmable wrapper selected; Phase 9 rebuild pending | source block design uses the packed programmable top; the current bitstream/XSA predates the completed numeric path |
 | bare-metal DMA integration | High fixed baseline; programmable tile software pending | fixed-path Vitis app and BOOT.BIN build from XSA |
 | real hardware behavior | Pending | board not yet available |
 
@@ -71,6 +73,7 @@ make packed-dma-writer-test
 make tile-test
 make programmable-runtime-test
 make programmable-system-test
+make numeric-runtime-test
 make golden-test
 make unit
 make regression

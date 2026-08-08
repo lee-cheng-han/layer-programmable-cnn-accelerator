@@ -57,6 +57,7 @@ module cnn_programmable_axi_lite_slave #(
   input  logic [15:0] current_tile_y,
   input  logic [31:0] completed_layer_count,
   input  logic [31:0] completed_tile_count,
+  input  logic [31:0] saturation_event_count,
   input  logic layer_done,
   input  logic core_busy,
   input  logic core_done,
@@ -92,6 +93,7 @@ module cnn_programmable_axi_lite_slave #(
   localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_INPUT_DDR_HI = 12'h05C;
   localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_OUTPUT_DDR_LO = 12'h060;
   localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_OUTPUT_DDR_HI = 12'h064;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_SATURATION_EVENTS = 12'h068;
   localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_VERSION = 12'h0FC;
 
   localparam logic [1:0] AXI_RESP_OKAY = 2'b00;
@@ -298,7 +300,8 @@ module cnn_programmable_axi_lite_slave #(
           ADDR_INPUT_DDR_HI: s_axi_rdata <= active_input_ddr_offset[63:32];
           ADDR_OUTPUT_DDR_LO: s_axi_rdata <= active_output_ddr_offset[31:0];
           ADDR_OUTPUT_DDR_HI: s_axi_rdata <= active_output_ddr_offset[63:32];
-          ADDR_VERSION: s_axi_rdata <= 32'h0005_0000;
+          ADDR_SATURATION_EVENTS: s_axi_rdata <= saturation_event_count;
+          ADDR_VERSION: s_axi_rdata <= 32'h0005_0001;
           default: begin
             s_axi_rdata <= 32'hDEAD_BEEF;
             s_axi_rresp <= AXI_RESP_SLVERR;

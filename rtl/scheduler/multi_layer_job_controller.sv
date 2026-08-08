@@ -116,6 +116,8 @@ module multi_layer_job_controller #(
   logic signed [DATA_W-1:0] scheduler_weights_1x1 [MAX_COUT][MAX_CIN];
   logic signed [DATA_W-1:0] scheduler_weights_3x3 [MAX_COUT][MAX_CIN][9];
   logic signed [BIAS_W-1:0] scheduler_bias [MAX_COUT];
+  logic signed [31:0] legacy_quant_multiplier [MAX_COUT];
+  logic [5:0] legacy_quant_shift [MAX_COUT];
   logic signed [OUT_W-1:0] scheduler_output [MAX_PIXELS*MAX_COUT];
   logic [ADDR_W-1:0] scratch_activation_read_pixel;
   logic [COUNT_W-1:0] scratch_activation_read_c_base;
@@ -313,6 +315,8 @@ module multi_layer_job_controller #(
     end
 
     for (int co = 0; co < MAX_COUT; co++) begin
+      legacy_quant_multiplier[co] = 32'sd1;
+      legacy_quant_shift[co] = '0;
       unique case (layer_index)
         2'd0: scheduler_bias[co] = (co < HIDDEN_C) ? bias_l0[co] : '0;
         2'd1: scheduler_bias[co] = (co < HIDDEN_C) ? bias_l1[co] : '0;
@@ -569,6 +573,10 @@ module multi_layer_job_controller #(
     .relu_enable(active_relu_enable),
     .quant_enable(active_quant_enable),
     .quant_shift(active_quant_shift),
+    .per_channel_quant_enable(1'b0),
+    .quant_multiplier(legacy_quant_multiplier),
+    .per_channel_quant_shift(legacy_quant_shift),
+    .output_zero_point(8'sd0),
     .activation(scheduler_activation),
     .weights_1x1(scheduler_weights_1x1),
     .weights_3x3(scheduler_weights_3x3),
@@ -592,6 +600,7 @@ module multi_layer_job_controller #(
     .output_pixel_channels(scheduler_output_pixel_channels),
     .output_pixel_data(scheduler_output_pixel_data),
     .output_pixel_last(scheduler_output_pixel_last),
+    .output_pixel_saturation_count(),
     .current_x(),
     .current_y(),
     .busy(),
