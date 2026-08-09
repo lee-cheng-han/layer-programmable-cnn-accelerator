@@ -285,6 +285,9 @@ module tb_programmable_system_top;
     do axi_read(ADDR_PARAMETER_BANKS, value); while (value[1:0] == 0);
     axi_write(ADDR_CONTROL, 32'd1);
     wait (busy && dut.current_tile_x == 0);
+    repeat (2) @(posedge aclk);
+    if (!dut.u_runtime.parameter_config_valid_q)
+      $fatal(1, "parameter refill configuration unavailable while busy");
     send_packet(DMA_PACKET_INPUT_TILE, 0, 0, 0, 2,
                 32'h0504_0201, 4'hF, 4);
     wait (busy && dut.current_tile_x == 2);

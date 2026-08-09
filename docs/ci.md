@@ -80,3 +80,11 @@ bitstreams, XSAs, ELFs, `BOOT.BIN`, and evidence logs as GitHub Actions
 artifacts.
 
 Use this full flow intentionally because it is much slower than RTL simulation.
+
+The unlicensed push workflow also compiles and executes the portable package,
+tile, and packet runtime and strictly compiles the board application against a
+minimal BSP shim:
+
+```bash
+make baremetal-runtime-test
+```

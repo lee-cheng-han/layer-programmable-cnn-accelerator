@@ -122,11 +122,8 @@ make tile-test
 
 ## Remaining Integration Work
 
-- Bridge the integrated programmable runtime controls and status to the
-  board-facing AXI-Lite register block.
-- Add software scheduling that gathers clipped NHWC source rectangles from
-  DDR and scatters output tiles back into DDR tensors.
 - Add randomized multi-layer runtime payload/backpressure and malformed-packet
   recovery regressions.
-- Integrate the programmable packet router/runtime into the Zybo block design
-  and rerun implementation at 125 MHz.
+- Rebuild the programmable Zybo block design, rerun implementation at 125 MHz,
+  and compile the target ELF against the exported XSA.
+- Validate software-managed DDR tile scheduling on physical hardware.

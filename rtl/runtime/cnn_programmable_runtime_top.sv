@@ -243,7 +243,7 @@ module cnn_programmable_runtime_top #(
       parameter_config_crc32_q <= '0;
     end else begin
       parameter_config_valid_q <=
-        !clear && descriptor_valid && !busy &&
+        !clear && descriptor_valid &&
         (descriptor_layer_id == 16'(parameter_layer_select));
       parameter_config_layer_id_q <= parameter_layer_select;
       parameter_config_kernel_size_q <= descriptor_kernel_width[1:0];

@@ -47,7 +47,7 @@
 | stream-loaded activations/weights/biases | High | stream-loaded full-network golden flow |
 | seven-packet AXI tensor job | High | AXI stream full-network golden flow |
 | output backpressure | High | stream-loaded and AXI stream golden flows |
-| AXI-Lite control/status/performance registers | High fixed baseline; programmable bridge pending | fixed system wrapper and Vitis app build against exported XSA |
+| AXI-Lite control/status/performance registers | High pre-board | programmable lifecycle, metadata, launch, progress, parameter-bank, DDR-context, IRQ, and error registers pass integrated RTL tests |
 | runtime metadata lifecycle | High pre-board | standalone lifecycle test plus complete AXI-Lite metadata load and activation |
 | descriptor-driven execution | High pre-integration | active-bank four-layer golden flow, eight-layer boundary flow, and negative tests under Verilator CI |
 | reusable runtime parameters | High pre-integration | bank-level negative tests plus integrated eight-layer scratchpad-backed execution |
@@ -57,7 +57,7 @@
 | integrated programmable runtime | High pre-board | atomic model activation, descriptor-derived parameter CRC validation, packed tile ingress, real compute, and packed output in one RTL top |
 | programmable AXI-Lite system | High pre-board | AXI-Lite metadata/lifecycle/launch and progress readback wrapped around CRC-checked packed parameter/tile execution |
 | Zynq block design integration | Programmable wrapper selected; Phase 9 rebuild pending | source block design uses the packed programmable top; the current bitstream/XSA predates the completed numeric path |
-| bare-metal DMA integration | High fixed baseline; programmable tile software pending | fixed-path Vitis app and BOOT.BIN build from XSA |
+| bare-metal DMA integration | High pre-board | package validation, atomic metadata activation, parameter-bank refill, clipped NHWC gather/scatter, packed packet validation, cache maintenance, and strict host compilation; target ELF rebuild pending XSA |
 | real hardware behavior | Pending | board not yet available |
 
 ## Main Regression Commands

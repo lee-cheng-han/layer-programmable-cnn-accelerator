@@ -107,8 +107,9 @@ The production board path uses `cnn_programmable_system_top`. It connects
 the atomically active metadata view through `cnn_programmable_job_engine` to
 two runtime parameter banks and the tiled multi-layer runtime. The generated
 Zybo block design selects its `TKEEP`-aware wrapper and routes the CNN and both
-DMA interrupts to the PS. Implementation closure and DDR gather/scatter
-software still remain. The numeric path resolves active per-channel
+DMA interrupts to the PS. DDR gather/scatter, cache maintenance, parameter-bank
+refill, and package activation are implemented in the portable bare-metal
+runtime; a rebuilt board implementation and target ELF remain. The numeric path resolves active per-channel
 multiplier/shift/zero-point descriptors, performs pipelined round-half-to-even
 requantization, supports final-layer residual add/subtract, and reports
 saturation events. The fixed seven-packet path is retained only as a
@@ -137,9 +138,8 @@ The accelerator uses AXI-Lite for control and observability. Tensor payloads are
 
 ## Software Interaction
 
-The production bare-metal runtime will load a package into DDR, stage and
-validate metadata, atomically activate the model, refill reusable parameter
-banks, gather halo-aware input/residual tiles, submit packed DMA transfers,
-scatter output tiles, maintain caches, and recover from DMA or accelerator
-timeouts. The existing fixed-network application remains regression evidence;
-programmable gather/scatter software is the next board-facing milestone.
+The production bare-metal runtime loads a package into DDR, stages and
+validates metadata, atomically activates the model, refills reusable parameter
+banks, gathers halo-aware input/residual tiles, submits packed DMA transfers,
+scatters output tiles, maintains caches, and recovers from DMA or accelerator
+timeouts. The existing fixed-network application remains regression evidence.

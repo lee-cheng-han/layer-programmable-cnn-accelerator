@@ -57,9 +57,13 @@ jobs:
         run: |
           make baremetal-headers
 
-      - name: Verify generated header is current
+      - name: Verify generated headers are current
         run: |
-          git diff --exit-code -- software/zynq_baremetal/generated/golden_dma_job.h
+          git diff --exit-code -- software/zynq_baremetal/generated/
+
+      - name: Test programmable bare-metal runtime
+        run: |
+          make baremetal-runtime-test
 
   rtl_lint:
     name: ci / rtl · verilator lint
@@ -89,6 +93,10 @@ jobs:
       - name: Run programmable job-engine test
         run: |
           make programmable-engine-test
+
+      - name: Run programmable AXI-Lite system test
+        run: |
+          make programmable-system-test
 
       - name: Run packed DMA protocol test
         run: |

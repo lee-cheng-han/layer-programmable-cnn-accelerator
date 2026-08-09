@@ -266,8 +266,8 @@ INT8 elements per 32-bit beat, low-lane `TKEEP`, and `TLAST` on the final beat.
 It carries tensor/layer IDs, tile coordinates, channel ranges, and job IDs.
 See [packed_dma_protocol.md](docs/packed_dma_protocol.md). This path is
 integrated through the programmable multi-layer tiled runtime in RTL; the
-generated board bitstream continues to use the preserved seven-packet contract
-until metadata-store and board integration are complete.
+Zybo block design selects this packed programmable wrapper. The checked-in
+fixed seven-packet flow remains regression evidence only.
 
 ## Repository Layout
 
@@ -319,6 +319,7 @@ Run individual verification layers:
 ```bash
 make model-test       # bit-accurate Python arithmetic tests
 make model-package-example # compile and execute the V1 RGB identity package
+make baremetal-runtime-test # host-check package/tile/DMA runtime and board C
 make golden-test      # generated tensor fixtures against integrated RTL
 make unit             # directed and randomized RTL testbenches
 make lint             # Verilator lint
@@ -341,12 +342,13 @@ Current coverage and known gaps are maintained in
 make baremetal-headers
 ```
 
-This regenerates the model fixtures and the C header consumed by the
-bare-metal DMA application:
+This regenerates the fixed regression fixture and the programmable package,
+input, and golden output consumed by the bare-metal application:
 
 ```text
 build/golden/full_network_3layer/
 software/zynq_baremetal/generated/golden_dma_job.h
+software/zynq_baremetal/generated/programmable_demo.h
 ```
 
 ### FPGA and Software Build

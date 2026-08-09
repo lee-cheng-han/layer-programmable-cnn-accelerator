@@ -20,9 +20,9 @@ atomically activated, and reused across multiple images.
 | 5 | Generalize descriptor-driven layer execution control | Complete |
 | 6 | Add reusable active/prefetch parameter banks | Complete |
 | 7 | Introduce packed, versioned DMA protocol | Complete |
-| 8 | Implement DDR-backed spatial tiling and halo handling | RTL complete through integrated software-managed tile interface |
+| 8 | Implement DDR-backed spatial tiling and halo handling | Complete through portable software-managed DDR runtime |
 | 9 | Complete residual and quantization behavior in runtime RTL | Complete |
-| 10 | Build runtime software and connect interrupts | AXI-Lite and board interrupt wiring complete; runtime software pending |
+| 10 | Build runtime software and connect interrupts | Polling runtime and board interrupt wiring complete; interrupt-driven scheduling remains |
 | 11 | Add autonomous DDR fetching | Planned |
 | 12 | Expand protocol, randomized, golden, and negative verification | Planned |
 | 13 | Optimize performance and validate physical hardware | Planned |
@@ -74,9 +74,11 @@ boundaries, partial packets, and AXI backpressure. A two-layer packed flow also
 proves tensor-ID preservation, software-managed DDR handoff, progress, and
 invalid-chain rejection. The atomically active metadata view exports layer
 tile hints and complete input/output DDR offset/allocation/stride records.
-Software DDR gather/scatter, board integration, and randomized multi-layer
-payload coverage remain. The planner itself has deterministic randomized
-geometry coverage. See [tiled_execution.md](tiled_execution.md).
+The portable bare-metal library validates compiled packages, derives the same
+clipped source geometry, gathers and scatters strided NHWC tensors, and
+encodes and validates exact packed DMA packets. Randomized multi-layer payload
+coverage remains. The planner itself has deterministic randomized geometry
+coverage. See [tiled_execution.md](tiled_execution.md).
 
 Phase 9 now resolves each active layer's quantization descriptor, supplies
 per-output-channel signed multipliers, shifts, and zero points to a pipelined
@@ -93,8 +95,11 @@ multi-layer controller into one synthesizable data path. Its golden test loads
 and activates a model, streams parameters and tiles, and verifies packed
 output. The Zybo block design now selects this top as its production stream
 core, carries `TKEEP` end to end, and routes CNN, DMA MM2S, and DMA S2MM
-interrupts to the PS. DDR gather/scatter runtime software remains before this
-path reaches software regression parity with the fixed-network baseline.
+interrupts to the PS. The software-managed runtime now stages packages,
+preloads and refills reusable parameter banks, schedules tiles through AXI DMA,
+maintains cache ownership, and validates and scatters packed output. A rebuilt
+XSA, target ELF, and physical board run remain before hardware regression
+parity.
 
 ## Engineering Completion Plan
 
@@ -106,7 +111,7 @@ documented interface or an isolated module.
 |---:|---|---|---|
 | 1 | Converge on one production architecture | In progress; programmable runtime selected by the Zybo block design | Legacy execution RTL and software are retired after programmable bare-metal regression parity |
 | 2 | Complete per-channel quantization | Implemented | Active quantization descriptors drive per-output-channel multiplier/shift, round-half-to-even, saturation, and zero-point checks through the integrated tiled runtime |
-| 3 | Implement DDR tile scheduling | RTL interface implemented; software pending | Bare-metal software gathers clipped NHWC source rectangles, submits DMA packets, scatters outputs, manages intermediate tensors and caches, and times out safely |
+| 3 | Implement DDR tile scheduling | Implemented in portable bare-metal runtime | Board execution proves clipped NHWC gather, DMA submission, output scatter, intermediate tensors, cache maintenance, and timeout recovery |
 | 4 | Strengthen integrated verification | Partial | Deterministic randomized 1-8-layer package-to-output tests cover mixed kernels, strides, padding, tails, backpressure, partial beats, CRC faults, malformed packets, and model replacement |
 | 5 | Improve structured error propagation | Partial | First-failure records identify subsystem, model generation, layer, tensor, tile, field, observed value, and expected range for every programmable-runtime failure |
 | 6 | Add runtime observability | Partial | Per-layer/tile cycles, compute utilization, DMA starvation, output stalls, parameter stalls, bytes, MACs, and saturation events are software-visible and tested |
@@ -139,16 +144,13 @@ documented interface or an isolated module.
    The programmable PL top now retains timing across default and Explore OOC
    implementations at 125 MHz. The board-integrated implementation remains the
    final gate for PS, DMA, clock, and external-constraint closure.
-2. **DDR-backed runtime software:** load active packages and parameters, gather
-   halo-aware tiles, operate AXI DMA, scatter outputs, maintain caches, and
-   recover from timeouts.
-3. **Verification and diagnostics hardening:** add randomized multi-layer
+2. **Verification and diagnostics hardening:** add randomized multi-layer
    package flows, fault recovery, structured programmable errors, and detailed
    performance counters.
-4. **Programmable board implementation closure:** carry the closed programmable
+3. **Programmable board implementation closure:** carry the closed programmable
    PL top into the Zynq block design, rerun full-board timing, and generate the
    final bitstream/XSA/BOOT.BIN baseline.
-5. **Physical-board validation and demonstration:** capture correctness,
+4. **Physical-board validation and demonstration:** capture correctness,
    UART/ILA/device evidence, and measured 224x224/512x512 performance.
 
 ## Final Workflow
@@ -160,14 +162,16 @@ network.yaml + signed INT8 weights
   -> load staging metadata
   -> validate checksums, capabilities, and references
   -> atomically activate model generation
+  -> software schedules DDR-backed tiles through AXI DMA
   -> run multiple input images
   -> output tensors and per-layer performance records
 ```
 
 The complete model package remains in DDR. Descriptors and tensor/quantization
 metadata are retained in accelerator memory. Layer parameters are prefetched
-from DDR into reusable banks as needed. A final `RUN_IMAGE` launches a complete
-job without CPU intervention for every tile or layer.
+from DDR into reusable banks as needed. The current V1 runtime uses the
+Cortex-A9 to schedule each tile; autonomous PL-side DDR fetching remains the
+optional Phase 11 optimization.
 
 ## Performance Framing
 

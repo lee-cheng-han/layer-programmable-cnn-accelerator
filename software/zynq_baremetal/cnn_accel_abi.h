@@ -15,21 +15,51 @@
 #define CNN_ERROR_RECORD_SIZE               64u
 #define CNN_ABI_RECORD_ALIGNMENT            64u
 #define CNN_NO_TENSOR_ID                 0xFFFFu
-#define CNN_REGISTER_MAP_VERSION      0x00040000u
-#define CNN_REG_MODEL_COMMAND              0x028u
-#define CNN_REG_MODEL_STATUS               0x02Cu
-#define CNN_REG_STAGING_MODEL_ID           0x030u
-#define CNN_REG_STAGING_GENERATION         0x034u
-#define CNN_REG_ACTIVE_MODEL_ID            0x038u
-#define CNN_REG_ACTIVE_GENERATION          0x03Cu
-#define CNN_REG_METADATA_ADDRESS           0x040u
-#define CNN_REG_METADATA_DATA              0x044u
-#define CNN_REG_METADATA_COMMIT            0x048u
-#define CNN_REG_MODEL_ERROR                0x04Cu
-#define CNN_REG_STAGING_COUNTS0            0x050u
-#define CNN_REG_STAGING_COUNTS1            0x054u
-#define CNN_REG_CAPABILITY_BASE            0x100u
-#define CNN_REG_STRUCTURED_ERROR_BASE       0x180u
+#define CNN_REGISTER_MAP_VERSION      0x00050001u
+
+/* Programmable runtime register map. */
+#define CNN_REG_CONTROL                    0x000u
+#define CNN_REG_STATUS                     0x004u
+#define CNN_REG_IRQ_STATUS                 0x008u
+#define CNN_REG_IRQ_ENABLE                 0x00Cu
+#define CNN_REG_JOB_ID                     0x010u
+#define CNN_REG_PARAMETER_LAYER            0x014u
+#define CNN_REG_MODEL_COMMAND              0x018u
+#define CNN_REG_MODEL_STATUS               0x01Cu
+#define CNN_REG_ACTIVE_MODEL_ID            0x020u
+#define CNN_REG_ACTIVE_GENERATION          0x024u
+#define CNN_REG_ACTIVE_LAYER_COUNT         0x028u
+#define CNN_REG_METADATA_ADDRESS           0x02Cu
+#define CNN_REG_METADATA_DATA              0x030u
+#define CNN_REG_METADATA_COMMIT            0x034u
+#define CNN_REG_MODEL_ERROR                0x038u
+#define CNN_REG_RUNTIME_ERROR              0x03Cu
+#define CNN_REG_ACTIVE_TENSORS             0x040u
+#define CNN_REG_CURRENT_TILE               0x044u
+#define CNN_REG_COMPLETED_LAYERS            0x048u
+#define CNN_REG_COMPLETED_TILES             0x04Cu
+#define CNN_REG_PACKET_ERRORS               0x050u
+#define CNN_REG_PARAMETER_BANKS             0x054u
+#define CNN_REG_INPUT_DDR_LO                0x058u
+#define CNN_REG_INPUT_DDR_HI                0x05Cu
+#define CNN_REG_OUTPUT_DDR_LO               0x060u
+#define CNN_REG_OUTPUT_DDR_HI               0x064u
+#define CNN_REG_SATURATION_EVENTS           0x068u
+#define CNN_REG_VERSION                     0x0FCu
+
+#define CNN_CONTROL_START                   (1u << 0)
+#define CNN_CONTROL_CLEAR                   (1u << 1)
+#define CNN_STATUS_BUSY                     (1u << 0)
+#define CNN_STATUS_DONE                     (1u << 1)
+#define CNN_STATUS_ERROR                    (1u << 2)
+#define CNN_STATUS_LAYER_DONE               (1u << 3)
+#define CNN_STATUS_MODEL_ACTIVE             (1u << 4)
+#define CNN_STATUS_ACTIVE_LAYER_SHIFT       5u
+#define CNN_STATUS_ACTIVE_LAYER_MASK        (7u << CNN_STATUS_ACTIVE_LAYER_SHIFT)
+#define CNN_STATUS_PARAMETER_BANK_SHIFT     12u
+#define CNN_STATUS_PARAMETER_BANK_MASK      (3u << CNN_STATUS_PARAMETER_BANK_SHIFT)
+#define CNN_IRQ_DONE                        (1u << 0)
+#define CNN_IRQ_ERROR                       (1u << 1)
 
 #define CNN_MAX_LAYERS                       8u
 #define CNN_MAX_TENSORS                     32u
@@ -59,6 +89,16 @@
 #define CNN_MODEL_COMMAND_VALIDATE     (1u << 2)
 #define CNN_MODEL_COMMAND_ACTIVATE     (1u << 3)
 #define CNN_MODEL_COMMAND_RETIRE       (1u << 4)
+#define CNN_MODEL_COMMAND_CLEAR_ERROR  (1u << 5)
+
+#define CNN_DMA_PACKET_MAGIC           0x31504E43u
+#define CNN_DMA_PACKET_VERSION                  1u
+#define CNN_DMA_PACKET_HEADER_WORDS             8u
+#define CNN_DMA_PACKET_HEADER_BYTES             32u
+#define CNN_DMA_PACKET_INPUT_TILE                 1u
+#define CNN_DMA_PACKET_LAYER_WEIGHTS              2u
+#define CNN_DMA_PACKET_LAYER_BIASES               3u
+#define CNN_DMA_PACKET_OUTPUT_TILE                4u
 
 enum cnn_model_staging_state {
     CNN_MODEL_STAGING_UNLOADED = 0,

@@ -1,50 +1,74 @@
-# Bare-Metal Golden DMA App
+# Programmable Bare-Metal Runtime
 
-The bare-metal app drives the packetized image-to-image accelerator through the Zybo Z7-20 AXI DMA block design.
+The Zybo Z7-20 application is the software-managed DDR runtime for the
+layer-programmable accelerator. It consumes the same relocatable `.cnn` model
+package as the Python executor, validates it before touching hardware, stages
+its descriptors through AXI-Lite, and atomically activates the new model.
 
-The generated demo packet contains deterministic Gaussian-denoiser parameters,
-not random full-network weights. Residual mode returns the low-pass RGB image;
-non-residual mode returns the predicted high-frequency component. Parameters
-are ordinary packet payloads and can be replaced without changing the FPGA
-bitstream, provided the fixed layer shapes and packet lengths are preserved.
+The application is not tied to a fixed network shape or seven-packet stream.
+Any package inside the V1 limits can describe one to eight 1x1/3x3 layers,
+runtime channel counts, stride, padding, activation, residual behavior,
+per-channel requantization, tensor strides, and DDR workspace placement.
 
-It uses the deterministic Python golden tensor case from `build/golden/full_network_3layer`, converts it into the seven-packet AXI input stream, runs both residual and non-residual output modes, and compares the returned DMA output buffer against the expected signed INT8 RGB pixels.
+## Execution Flow
 
-## Software Flow
+1. Validate package size, table bounds, ABI record headers, package CRC32, and
+   every layer parameter CRC32 using endian-safe parsing.
+2. Write header, layer, tensor, and quantization records into staging metadata.
+3. Issue `FINISH_LOAD`, `VALIDATE`, and `ACTIVATE`; confirm model identity and
+   generation before execution.
+4. Preload two reusable parameter banks, then refill a released bank when a
+   later layer reaches the parameter-wait state.
+5. Derive each output tile and clipped input receptive field from descriptors.
+6. Gather NHWC source bytes from the package-defined DDR workspace and submit
+   a versioned `INPUT_TILE` packet through AXI DMA.
+7. Arm S2MM first, validate each returned `OUTPUT_TILE` header, then scatter
+   its packed INT8 payload into the output tensor allocation.
+8. Flush and invalidate cache ranges around DMA ownership transitions and
+   terminate safely on DMA, model-lifecycle, packet, or runtime timeouts.
 
-The app performs the following sequence for each test mode:
+The checked-in bring-up asset is a 4x4 RGB identity package generated from
+`examples/models/rgb_identity.json`. It exercises package activation, runtime
+parameter loading, packed partial/full beats, tiled DMA, and exact golden
+output comparison. Larger applications can supply another compiled package,
+image buffer, and workspace without rebuilding the PL bitstream.
 
-1. Reset AXI DMA.
-2. Clear the accelerator.
-3. Program `IMAGE_WIDTH`, `IMAGE_HEIGHT`, and `MODE_FLAGS`.
-4. Clear pending interrupt status.
-5. Start S2MM and MM2S DMA channels.
-6. Pulse `CONTROL.start`.
-7. Launch S2MM length before MM2S length.
-8. Poll DMA completion and `STATUS.done`.
-9. Print diagnostics and performance counters.
-10. Compare all returned output words against the generated golden data.
+The reference app reserves a 256 MiB standalone DDR workspace at
+`0x10000000`. Tensor descriptor offsets are relative to that base. Integrators
+can move or resize the region to match their linker and memory map.
 
-Expected final UART result:
+Expected UART result:
 
 ```text
-[PASS] image-to-image DMA golden test passed
+[PASS] programmable package-driven CNN test passed
 ```
 
 ## Artifacts
 
-- App source: `software/zynq_baremetal/main.c`
-- Shared ABI/capability definitions: `software/zynq_baremetal/cnn_accel_abi.h`
-- Generated golden C header: `software/zynq_baremetal/generated/golden_dma_job.h`
-- Vitis app generator: `scripts/vitis/create_zynq_baremetal_app.py`
-- Built ELF: `build/vitis_ws/cnn_baremetal/build/cnn_baremetal.elf`
-- Generated FSBL: `build/vitis_ws/zybo_z7_20_cnn_platform/zynq_fsbl/build/fsbl.elf`
-- Hardware platform: `build/zybo_z7_20_cnn/zybo_z7_20_cnn.xsa`
+- Board application: `software/zynq_baremetal/main.c`
+- Portable package/tile/packet library: `cnn_programmable_runtime.c/.h`
+- Shared ABI and register constants: `cnn_accel_abi.h`
+- Generated demonstration: `generated/programmable_demo.h`
+- Asset generator: `scripts/generate_programmable_baremetal_demo.py`
+- Vitis project generator: `scripts/vitis/create_zynq_baremetal_app.py`
 
-## Regenerate
+## Verification And Build
+
+The portable library, real compiler-generated package, packet codec, tile
+gather/scatter path, and board application syntax compile in open-source CI:
+
+```bash
+make baremetal-runtime-test
+```
+
+After the implemented Zybo XSA exists, build the target ELF with:
 
 ```bash
 make vitis-app
 ```
 
-The target regenerates the Python golden tensors, emits the C packet/expected-output header, creates the Vitis platform from the XSA, and builds `cnn_baremetal.elf`.
+Expected target artifact:
+
+```text
+build/vitis_ws/cnn_baremetal/build/cnn_baremetal.elf
+```

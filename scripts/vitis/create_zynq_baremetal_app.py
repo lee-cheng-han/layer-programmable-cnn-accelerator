@@ -53,17 +53,23 @@ src_main = root / "software" / "zynq_baremetal" / "main.c"
 dst_main = app_src_dir / "main.c"
 src_abi_header = root / "software" / "zynq_baremetal" / "cnn_accel_abi.h"
 dst_abi_header = app_src_dir / "cnn_accel_abi.h"
+src_runtime = root / "software" / "zynq_baremetal" / "cnn_programmable_runtime.c"
+dst_runtime = app_src_dir / "cnn_programmable_runtime.c"
+src_runtime_header = root / "software" / "zynq_baremetal" / "cnn_programmable_runtime.h"
+dst_runtime_header = app_src_dir / "cnn_programmable_runtime.h"
 dst_hello = app_src_dir / "helloworld.c"
 user_config = app_src_dir / "UserConfig.cmake"
 hello_cmake = app_src_dir / "Hello_worldExample.cmake"
 cmake_file = app_src_dir / "CMakeLists.txt"
 
-for source in (src_main, src_abi_header):
+for source in (src_main, src_abi_header, src_runtime, src_runtime_header):
     if not source.exists():
         raise FileNotFoundError(f"Missing source file: {source}")
 
 shutil.copyfile(src_main, dst_main)
 shutil.copyfile(src_abi_header, dst_abi_header)
+shutil.copyfile(src_runtime, dst_runtime)
+shutil.copyfile(src_runtime_header, dst_runtime_header)
 
 src_generated = root / "software" / "zynq_baremetal" / "generated"
 dst_generated = app_src_dir / "generated"
@@ -79,7 +85,7 @@ else:
 
 if user_config.exists():
     text = user_config.read_text()
-    text = text.replace('"helloworld.c"', '"main.c"')
+    text = text.replace('"helloworld.c"', '"main.c" "cnn_programmable_runtime.c"')
     user_config.write_text(text)
 else:
     raise FileNotFoundError(f"Missing Vitis source config: {user_config}")

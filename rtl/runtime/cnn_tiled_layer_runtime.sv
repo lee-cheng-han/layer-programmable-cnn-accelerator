@@ -711,7 +711,8 @@ module cnn_tiled_layer_runtime #(
 
             S_CALCULATE_PAYLOAD: begin
               input_payload_bytes_q <=
-                32'(multiply_area_channels(input_tile_area_q[15:0], cin));
+                32'(multiply_area_channels(
+                  16'(source_width_q * source_height_q), cin));
               output_payload_bytes_q <=
                 32'(multiply_area_channels(output_tile_area_q[15:0], cout));
               state <= S_WAIT_INPUT;
