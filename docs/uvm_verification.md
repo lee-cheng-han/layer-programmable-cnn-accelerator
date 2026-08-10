@@ -75,13 +75,10 @@ an equivalent compile script.
 
 ## Current Local Tool Status
 
-Vivado/XSim 2025.2 on the current host successfully compiles every UVM source,
-elaborates the complete programmable DUT, and builds the simulation snapshot.
-The local XSim executable then raises an internal exception while loading even
-a minimal independent UVM snapshot. This is a simulator/host runtime issue, not
-a failure in the repository environment. `make uvm-compile` is therefore the
-locally verified gate; executable UVM results must not be reported as passing
-until the snapshot runs on a supported XSim host or another UVM simulator.
+Vivado/XSim 2026.1 on the current host compiles every UVM source, elaborates the
+complete programmable DUT, and executes the register-access, protocol-recovery,
+and end-to-end smoke tests. `make uvm-regression` completes with zero UVM errors
+and zero UVM fatals in all three tests.
 
 ## Coverage Model
 
@@ -102,7 +99,7 @@ Implemented coverpoints include:
 | Stage | Deliverable | Current status | Completion gate |
 |---:|---|---|---|
 | U0 | Reusable UVM foundation | Complete | Production DUT, agents, monitors, RAL foundation, scoreboard, coverage, virtual sequencer, and tests compile and elaborate |
-| U1 | Executable regression | Blocked by local XSim runtime | Register, smoke, and recovery tests produce zero-error UVM summaries with archived logs and reproducible seeds |
+| U1 | Executable regression | Complete locally | Register, smoke, and recovery tests produce zero-error UVM summaries; CI artifact and seed archival remain to be added |
 | U2 | Independent closed-loop checking | Planned | Actual RTL output is stored in behavioral DDR, reused by the next layer, and compared against the independent Python/DPI-C reference model |
 | U3 | Protocol and RAL maturity | Planned | AXI timing variation, protocol validation, complete register model, predictor, mirrors, reset values, access policies, and byte strobes are covered |
 | U4 | Constrained-random and fault campaign | Planned | Compiler-generated 1-8-layer sequences cover legal combinations plus reset, abort, corruption, reordering, timeout, replacement, interrupt, residual, and saturation faults |
@@ -112,8 +109,8 @@ Implemented coverpoints include:
 
 ### Simulator And Regression
 
-1. Run UVM on a supported XSim host or another UVM 1.2 simulator and archive
-   zero-error logs for every implemented test.
+1. Archive zero-error logs, simulator version, test name, and random seed for
+   every implemented test in CI.
 2. Add simulator-specific compile adapters without changing the reusable UVM
    interfaces, packages, environment, or tests.
 3. Record simulator, test name, random seed, source revision, command, and

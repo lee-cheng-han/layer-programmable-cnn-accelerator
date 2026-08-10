@@ -135,7 +135,7 @@ package cnn_uvm_pkg;
       vif.wdata <= request.data;
       vif.wstrb <= request.strobe;
       vif.wvalid <= 1'b1;
-      vif.bready <= 1'b1;
+      vif.bready <= 1'b0;
       fork
         begin do @(posedge vif.aclk); while (!vif.awready); end
         begin do @(posedge vif.aclk); while (!vif.wready); end
@@ -143,6 +143,7 @@ package cnn_uvm_pkg;
       @(negedge vif.aclk);
       vif.awvalid <= 1'b0;
       vif.wvalid <= 1'b0;
+      vif.bready <= 1'b1;
       do @(posedge vif.aclk); while (!vif.bvalid);
       response.response = vif.bresp;
       @(negedge vif.aclk);
@@ -153,10 +154,11 @@ package cnn_uvm_pkg;
       @(negedge vif.aclk);
       vif.araddr <= request.address;
       vif.arvalid <= 1'b1;
-      vif.rready <= 1'b1;
+      vif.rready <= 1'b0;
       do @(posedge vif.aclk); while (!vif.arready);
       @(negedge vif.aclk);
       vif.arvalid <= 1'b0;
+      vif.rready <= 1'b1;
       do @(posedge vif.aclk); while (!vif.rvalid);
       response.data = vif.rdata;
       response.response = vif.rresp;

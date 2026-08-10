@@ -353,8 +353,12 @@ module tb_tiled_layer_runtime_3x3_stride2;
     repeat (4) @(posedge clk);
     rst_n = 1'b1;
 
-    @(negedge clk);
-    weight_write_enable = 1'b1;
+    for (int tap = 0; tap < 9; tap++) begin
+      @(negedge clk);
+      weight_write_enable = 1'b1;
+      weight_write_kernel_idx = 4'(tap);
+      weight_write_data = (tap == 4) ? 8'sd1 : 8'sd0;
+    end
     @(negedge clk);
     weight_write_enable = 1'b0;
     repeat (3) @(posedge clk);

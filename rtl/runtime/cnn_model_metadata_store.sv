@@ -314,9 +314,6 @@ module cnn_model_metadata_store #(
       output_slot = int'(execution_layer_lookup_q.tensor_ids[31:16]);
       residual_slot = int'(execution_layer_lookup_q.residual_quant[15:0]);
       for (int bank = 0; bank < 2; bank++) begin
-        execution_input_tensor_lookup_q[bank] <= '0;
-        execution_output_tensor_lookup_q[bank] <= '0;
-        execution_residual_tensor_lookup_q[bank] <= '0;
         if (execution_layer_lookup_q.valid &&
             (input_slot < MAX_TENSORS) &&
             (output_slot < MAX_TENSORS) &&
@@ -356,6 +353,9 @@ module cnn_model_metadata_store #(
             cached_tensor_pixel_stride[bank][output_slot];
           execution_output_tensor_lookup_q[bank].channel_stride <=
             cached_tensor_channel_stride[bank][output_slot];
+        end else begin
+          execution_input_tensor_lookup_q[bank] <= '0;
+          execution_output_tensor_lookup_q[bank] <= '0;
         end
         if (execution_layer_lookup_q.valid &&
             (execution_layer_lookup_q.postprocess[31:24] != RESIDUAL_NONE) &&
@@ -378,6 +378,8 @@ module cnn_model_metadata_store #(
             cached_tensor_pixel_stride[bank][residual_slot];
           execution_residual_tensor_lookup_q[bank].channel_stride <=
             cached_tensor_channel_stride[bank][residual_slot];
+        end else begin
+          execution_residual_tensor_lookup_q[bank] <= '0;
         end
       end
     end
@@ -425,7 +427,9 @@ module cnn_model_metadata_store #(
 
       unique case (quant_lookup_state)
         Q_IDLE: begin
-          if (execution_layer_lookup_qq.valid) begin
+          if (execution_layer_lookup_qq.valid &&
+              execution_output_tensor_lookup_q[
+                execution_layer_lookup_qq.bank].valid) begin
             quant_lookup_done <= 1'b0;
             quant_lookup_valid <= 1'b1;
             quant_lookup_bank <= execution_layer_lookup_qq.bank;

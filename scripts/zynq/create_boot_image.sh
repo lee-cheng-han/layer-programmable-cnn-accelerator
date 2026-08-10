@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BOOTGEN="${BOOTGEN:-$HOME/Xilinx/2025.2/Vitis/bin/bootgen}"
+BOOTGEN="${BOOTGEN:-$(command -v bootgen 2>/dev/null || printf '%s' "$HOME/Xilinx/2026.1/Vitis/bin/bootgen")}"
 FSBL="build/vitis_ws/zybo_z7_20_cnn_platform/zynq_fsbl/build/fsbl.elf"
 BIT="build/zybo_z7_20_cnn/zybo_z7_20_cnn.runs/impl_1/system_wrapper.bit"
 ELF="build/vitis_ws/cnn_baremetal/build/cnn_baremetal.elf"

@@ -116,7 +116,7 @@ Passing criteria:
 | descriptor-driven controller test | Passing |
 | runtime parameter-bank tests | Passing |
 | UVM source compile and complete DUT elaboration | Passing |
-| UVM executable tests | Pending compatible simulator runtime |
+| UVM executable tests | Passing on XSim 2026.1 |
 | Zynq block design | Passing |
 | implementation | Passing |
 | Timing | Met at 125 MHz |

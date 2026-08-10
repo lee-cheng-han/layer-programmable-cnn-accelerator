@@ -32,6 +32,10 @@ jobs:
         run: |
           if [[ -n "${VIVADO_SETTINGS:-}" && -f "${VIVADO_SETTINGS}" ]]; then
             source "${VIVADO_SETTINGS}"
+          elif [[ -f "${HOME}/Xilinx/2026.1/Vivado/settings64.sh" ]]; then
+            source "${HOME}/Xilinx/2026.1/Vivado/settings64.sh"
+          elif [[ -f "/tools/Xilinx/2026.1/Vivado/settings64.sh" ]]; then
+            source "/tools/Xilinx/2026.1/Vivado/settings64.sh"
           elif [[ -f "${HOME}/Xilinx/2025.2/Vivado/settings64.sh" ]]; then
             source "${HOME}/Xilinx/2025.2/Vivado/settings64.sh"
           elif [[ -f "/tools/Xilinx/2025.2/Vivado/settings64.sh" ]]; then
@@ -84,6 +88,10 @@ jobs:
         run: |
           if [[ -n "${VIVADO_SETTINGS:-}" && -f "${VIVADO_SETTINGS}" ]]; then
             source "${VIVADO_SETTINGS}"
+          elif [[ -f "${HOME}/Xilinx/2026.1/Vivado/settings64.sh" ]]; then
+            source "${HOME}/Xilinx/2026.1/Vivado/settings64.sh"
+          elif [[ -f "/tools/Xilinx/2026.1/Vivado/settings64.sh" ]]; then
+            source "/tools/Xilinx/2026.1/Vivado/settings64.sh"
           elif [[ -f "${HOME}/Xilinx/2025.2/Vivado/settings64.sh" ]]; then
             source "${HOME}/Xilinx/2025.2/Vivado/settings64.sh"
           elif [[ -f "/tools/Xilinx/2025.2/Vivado/settings64.sh" ]]; then
@@ -142,6 +150,10 @@ jobs:
         run: |
           if [[ -n "${VIVADO_SETTINGS:-}" && -f "${VIVADO_SETTINGS}" ]]; then
             source "${VIVADO_SETTINGS}"
+          elif [[ -f "${HOME}/Xilinx/2026.1/Vivado/settings64.sh" ]]; then
+            source "${HOME}/Xilinx/2026.1/Vivado/settings64.sh"
+          elif [[ -f "/tools/Xilinx/2026.1/Vivado/settings64.sh" ]]; then
+            source "/tools/Xilinx/2026.1/Vivado/settings64.sh"
           elif [[ -f "${HOME}/Xilinx/2025.2/Vivado/settings64.sh" ]]; then
             source "${HOME}/Xilinx/2025.2/Vivado/settings64.sh"
           elif [[ -f "/tools/Xilinx/2025.2/Vivado/settings64.sh" ]]; then

@@ -25,7 +25,7 @@ The design uses:
 | Console | UART1, MIO 48-49, 115200 8N1 |
 | Boot media | QSPI or microSD on SD0 |
 | PL clock | 125 MHz |
-| Toolchain | Vivado / Vitis 2025.2 |
+| Toolchain | Vivado / Vitis 2026.1 |
 | AXI-Lite base | `0x43C00000` |
 | AXI DMA base | `0x40400000` |
 

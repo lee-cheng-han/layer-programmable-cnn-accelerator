@@ -11,7 +11,7 @@
 | golden generation | `make baremetal-headers` | Passing | writes deterministic tensors and C DMA packet header |
 | software runtime corpus | `make runtime-corpus-test` | Passing | 24 seeded packages, 1-8 layers, 108 total layers, and 2,792 tiles cross-check compiler packages against the C ABI, tile, packet, and workspace runtime |
 | package-to-RTL numeric flow | `make randomized-package-rtl-test` | Passing | seeded compiler package drives four mixed layers, 26 halo tiles, two-bank parameter recycling, randomized output backpressure, and 268 exact golden packet beats |
-| UVM environment | `make uvm-compile` | Compile/elaboration passing | UVM 1.2 AXI-Lite/stream agents, RAL, scoreboard, functional coverage, virtual sequencing, smoke, register, and recovery tests build with the complete DUT; local XSim snapshot execution is blocked by a reproduced host/runtime exception |
+| UVM environment | `make uvm-regression` | Passing on XSim 2026.1 | UVM 1.2 AXI-Lite/stream agents, RAL, scoreboard, functional coverage, virtual sequencing, and complete DUT; register, recovery, and end-to-end smoke tests finish with zero UVM errors or fatals |
 | compute RTL | `tb_parallel_mac_array` | Covered | PC x PK signed INT8 MAC datapath |
 | post-processing RTL | `tb_parallel_requantizer` | Covered | per-channel multiply/shift, round-half-to-even ties, lane masks, and signed saturation |
 | residual output RTL | `tb_tile_output_serializer_numeric` | Covered | post-quantization INT8 add/subtract, positive/negative saturation, and clipping-event accounting |

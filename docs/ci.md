@@ -52,8 +52,10 @@ Runner requirements:
 
 - Linux self-hosted GitHub Actions runner
 - labels: `self-hosted`, `linux`, `vivado`
-- Vivado 2025.2 available in `PATH`, or one of:
+- Vivado 2026.1 available in `PATH`, or one of:
  - `VIVADO_SETTINGS=/path/to/Vivado/settings64.sh`
+ - `$HOME/Xilinx/2026.1/Vivado/settings64.sh`
+ - `/tools/Xilinx/2026.1/Vivado/settings64.sh`
  - `$HOME/Xilinx/2025.2/Vivado/settings64.sh`
  - `/tools/Xilinx/2025.2/Vivado/settings64.sh`
 
@@ -65,10 +67,10 @@ make uvm-compile
 ```
 
 The UVM gate compiles the UVM 1.2 agents, RAL model, scoreboard, coverage,
-tests, complete programmable DUT, and simulation snapshot. Executable UVM
-regression is enabled only on a runner where the XSim UVM snapshot loads
-successfully. The workflow uploads simulation logs as artifacts even on
-failure.
+tests, complete programmable DUT, and simulation snapshot. The local Vivado
+2026.1 flow also passes `make uvm-regression`; a self-hosted runner can promote
+that command to the CI gate once its XSim runtime is verified. The workflow
+uploads simulation logs as artifacts even on failure.
 
 ## Full FPGA Flow
 

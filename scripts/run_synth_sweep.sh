@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VIVADO_BIN="${VIVADO_BIN:-${HOME}/Xilinx/2025.2/Vivado/bin/vivado}"
+VIVADO_BIN="${VIVADO_BIN:-$(command -v vivado 2>/dev/null || printf '%s' "${HOME}/Xilinx/2026.1/Vivado/bin/vivado")}"
 SWEEP_ROOT="${SWEEP_ROOT:-build/synth_sweep}"
 
 if [[ ! -x "$VIVADO_BIN" ]]; then

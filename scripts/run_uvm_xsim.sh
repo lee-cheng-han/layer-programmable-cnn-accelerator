@@ -4,10 +4,18 @@ set -euo pipefail
 test_name="${UVM_TESTNAME:-cnn_uvm_smoke_test}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 build_dir="${TMPDIR:-/tmp}/cnn_uvm_xsim"
-xilinx_root="${XILINX_VIVADO:-$HOME/Xilinx/2025.2/Vivado}"
-xvlog_bin="${XVLOG:-$xilinx_root/bin/xvlog}"
-xelab_bin="${XELAB:-$xilinx_root/bin/xelab}"
-xsim_bin="${XSIM:-$xilinx_root/bin/xsim}"
+if [[ -n "${XILINX_VIVADO:-}" ]]; then
+  xilinx_root="$XILINX_VIVADO"
+elif command -v xvlog >/dev/null 2>&1; then
+  xilinx_root="$(cd "$(dirname "$(command -v xvlog)")/.." && pwd)"
+elif [[ -d "$HOME/Xilinx/2026.1/Vivado" ]]; then
+  xilinx_root="$HOME/Xilinx/2026.1/Vivado"
+else
+  xilinx_root="$HOME/Xilinx/2025.2/Vivado"
+fi
+xvlog_bin="${XVLOG:-$(command -v xvlog 2>/dev/null || printf '%s' "$xilinx_root/bin/xvlog")}"
+xelab_bin="${XELAB:-$(command -v xelab 2>/dev/null || printf '%s' "$xilinx_root/bin/xelab")}"
+xsim_bin="${XSIM:-$(command -v xsim 2>/dev/null || printf '%s' "$xilinx_root/bin/xsim")}"
 
 for tool in "$xvlog_bin" "$xelab_bin" "$xsim_bin"; do
   if [[ ! -x "$tool" ]]; then

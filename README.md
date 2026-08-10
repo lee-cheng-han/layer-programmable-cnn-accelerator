@@ -154,7 +154,7 @@ events.
 | DMA memory path | AXI DMA through PS `S_AXI_HP0` |
 | PL clock | 125 MHz from `FCLK_CLK0` |
 | Console | UART1 on MIO 48-49, 115200 8N1 |
-| Toolchain | Vivado and Vitis 2025.2 |
+| Toolchain | Vivado and Vitis 2026.1 |
 
 ## Implementation Results
 
@@ -299,10 +299,12 @@ Board-facing RTL entry points:
 - GNU Make and Bash
 - Python 3.10 or later
 - Verilator for standalone RTL lint
-- AMD Vivado and Vitis 2025.2 for XSim and board builds
+- AMD Vivado and Vitis 2026.1 for XSim and board builds
 - A Vivado installation licensed for `xc7z020clg400-1`
 
-The Makefile expects the 2025.2 tools below `$HOME/Xilinx/2025.2` by default.
+The Makefile discovers tools from `PATH`, with `$HOME/Xilinx/2026.1` as the
+default installation fallback. Override `VIVADO`, `VITIS`, `XSCT`, or
+`BOOTGEN` when using a different installation.
 The Digilent board definition is vendored in the repository; no global board
 store installation is required.
 
@@ -324,6 +326,7 @@ make runtime-corpus-test # seeded 1-8-layer Python/C runtime verification
 make randomized-package-rtl-test # compiler package through four-layer RTL runtime
 make uvm-compile       # compile/elaborate production UVM environment with XSim
 make uvm-smoke         # execute UVM lifecycle-to-output smoke test
+make uvm-regression    # execute register, recovery, and smoke UVM tests
 make golden-test      # generated tensor fixtures against integrated RTL
 make unit             # directed and randomized RTL testbenches
 make lint             # Verilator lint

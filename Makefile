@@ -2,6 +2,10 @@ SHELL := /bin/bash
 
 TB ?= tb_axi_stream_full_network_golden_flow
 VITIS_DATA_DIR ?= $(CURDIR)/build/vitis_data
+VIVADO ?= $(shell command -v vivado 2>/dev/null || printf '%s' '$(HOME)/Xilinx/2026.1/Vivado/bin/vivado')
+VITIS ?= $(shell command -v vitis 2>/dev/null || printf '%s' '$(HOME)/Xilinx/2026.1/Vitis/bin/vitis')
+XSCT ?= $(shell command -v xsct 2>/dev/null || printf '%s' '$(HOME)/Xilinx/2026.1/Vitis/bin/xsct')
+BOOTGEN ?= $(shell command -v bootgen 2>/dev/null || printf '%s' '$(HOME)/Xilinx/2026.1/Vitis/bin/bootgen')
 
 .PHONY: xsim regression xsim-regression lint clean flow-report report-flow check-warnings docs-check preboard-proof
 .PHONY: unit tile-test programmable-runtime-test programmable-system-test randomized-package-rtl-test uvm-compile uvm-smoke uvm-regression numeric-runtime-test descriptor-test parameter-bank-test programmable-engine-test packed-dma-test packed-dma-runtime-test packed-dma-writer-test model-test model-package-example golden-test synth-sweep synth-report
@@ -118,7 +122,7 @@ runtime-corpus-test:
 
 vitis-app: baremetal-headers
 	mkdir -p $(VITIS_DATA_DIR)
-	XILINX_VITIS_DATA_DIR=$(VITIS_DATA_DIR) $(HOME)/Xilinx/2025.2/Vitis/bin/vitis -s scripts/vitis/create_zynq_baremetal_app.py
+	XILINX_VITIS_DATA_DIR=$(VITIS_DATA_DIR) $(VITIS) -s scripts/vitis/create_zynq_baremetal_app.py
 
 regression: model-test golden-test unit
 
@@ -129,7 +133,7 @@ synth-report:
 	python3 scripts/report_synth_sweep.py --sweep-root build/synth_sweep --markdown docs/synthesis_experiments.md
 
 top-impl:
-	$(HOME)/Xilinx/2025.2/Vivado/bin/vivado -mode batch -source scripts/impl_top_ooc.tcl
+	$(VIVADO) -mode batch -source scripts/impl_top_ooc.tcl
 	python3 scripts/report_top_impl.py --build-dir build/top_impl --markdown docs/top_implementation.md
 
 top-report:
@@ -137,33 +141,33 @@ top-report:
 
 programmable-top-impl:
 	TOP_NAME=cnn_programmable_system_top OUT_DIR=build/programmable_top_impl \
-		$(HOME)/Xilinx/2025.2/Vivado/bin/vivado -mode batch -source scripts/impl_top_ooc.tcl
+		$(VIVADO) -mode batch -source scripts/impl_top_ooc.tcl
 	python3 scripts/report_top_impl.py --build-dir build/programmable_top_impl \
 		--markdown docs/programmable_top_implementation.md
 
 programmable-top-synth:
 	TOP_NAME=cnn_programmable_system_top SYNTH_ONLY=1 \
 		OUT_DIR=build/programmable_top_synth_candidate \
-		$(HOME)/Xilinx/2025.2/Vivado/bin/vivado -mode batch -source scripts/impl_top_ooc.tcl
+		$(VIVADO) -mode batch -source scripts/impl_top_ooc.tcl
 
 programmable-top-report:
 	python3 scripts/report_top_impl.py --build-dir build/programmable_top_impl \
 		--markdown docs/programmable_top_implementation.md
 
 programmable-top-physical-baseline:
-	$(HOME)/Xilinx/2025.2/Vivado/bin/vivado -mode batch \
+	$(VIVADO) -mode batch \
 		-source scripts/implement_checkpoint.tcl \
 		-tclargs build/programmable_top_impl/top_synth.dcp \
 		build/programmable_top_physical_baseline
 
 zybo-z7-project:
-	$(HOME)/Xilinx/2025.2/Vivado/bin/vivado -mode batch -source scripts/zynq/create_zybo_z7_20_project.tcl
+	$(VIVADO) -mode batch -source scripts/zynq/create_zybo_z7_20_project.tcl
 
 zybo-z7-bitstream:
-	$(HOME)/Xilinx/2025.2/Vivado/bin/vivado -mode batch -source scripts/zynq/build_zybo_z7_20_bitstream.tcl
+	$(VIVADO) -mode batch -source scripts/zynq/build_zybo_z7_20_bitstream.tcl
 
 zybo-z7-xsa:
-	$(HOME)/Xilinx/2025.2/Vivado/bin/vivado -mode batch -source scripts/zynq/export_zybo_z7_20_xsa.tcl
+	$(VIVADO) -mode batch -source scripts/zynq/export_zybo_z7_20_xsa.tcl
 
 full-zybo-z7-flow:
 	$(MAKE) zybo-z7-project
@@ -172,7 +176,7 @@ full-zybo-z7-flow:
 	$(MAKE) vitis-app
 
 boot-image:
-	bash scripts/zynq/create_boot_image.sh
+	BOOTGEN=$(BOOTGEN) bash scripts/zynq/create_boot_image.sh
 
 full-preboard-proof:
 	$(MAKE) regression
@@ -184,7 +188,7 @@ full-preboard-proof:
 preboard-proof: full-preboard-proof
 
 program-zybo-z7:
-	$(HOME)/Xilinx/2025.2/Vitis/bin/xsct scripts/zynq/program_and_run_dma.tcl
+	$(XSCT) scripts/zynq/program_and_run_dma.tcl
 
 lint:
 	bash scripts/lint_verilator.sh

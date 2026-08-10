@@ -61,4 +61,9 @@ module tb_cnn_programmable_uvm;
                                                "status_vif", status_if);
     run_test();
   end
+
+  initial begin
+    #2ms;
+    $fatal(1, "UVM testbench timeout");
+  end
 endmodule

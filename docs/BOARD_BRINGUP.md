@@ -40,7 +40,7 @@ make program-zybo-z7
 
 This uses:
 
-~/Xilinx/2025.2/Vitis/bin/xsct scripts/zynq/program_and_run_dma.tcl
+xsct scripts/zynq/program_and_run_dma.tcl
 
 ## SD boot option
 
