@@ -27,8 +27,13 @@ Checks:
   - bit-accurate Python model tests through `make model-test`
   - deterministic golden DMA header regeneration through `make baremetal-headers`
   - generated header diff check
+  - strict portable runtime and board-app compilation through `make baremetal-runtime-test`
+  - seeded 1-8-layer package/tile/protocol corpus through `make runtime-corpus-test`
 - `ci / rtl · verilator lint`
   - Verilator lint through `make lint`
+  - compiler-derived four-layer package, parameter-bank refill, tiled numeric
+    execution, packed-output comparison, and randomized backpressure through
+    `make randomized-package-rtl-test`
 - `ci / docs · evidence consistency`
   - README/result docs checked against the pre-board evidence log through `make docs-check`
   - checked-in warning-budget evidence must show zero unknown warnings, zero critical warnings, and zero errors
@@ -56,9 +61,14 @@ Default check:
 
 ```bash
 make regression
+make uvm-compile
 ```
 
-The workflow uploads simulation logs as artifacts even on failure.
+The UVM gate compiles the UVM 1.2 agents, RAL model, scoreboard, coverage,
+tests, complete programmable DUT, and simulation snapshot. Executable UVM
+regression is enabled only on a runner where the XSim UVM snapshot loads
+successfully. The workflow uploads simulation logs as artifacts even on
+failure.
 
 ## Full FPGA Flow
 
@@ -87,4 +97,6 @@ minimal BSP shim:
 
 ```bash
 make baremetal-runtime-test
+make runtime-corpus-test
+make randomized-package-rtl-test
 ```

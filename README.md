@@ -320,6 +320,10 @@ Run individual verification layers:
 make model-test       # bit-accurate Python arithmetic tests
 make model-package-example # compile and execute the V1 RGB identity package
 make baremetal-runtime-test # host-check package/tile/DMA runtime and board C
+make runtime-corpus-test # seeded 1-8-layer Python/C runtime verification
+make randomized-package-rtl-test # compiler package through four-layer RTL runtime
+make uvm-compile       # compile/elaborate production UVM environment with XSim
+make uvm-smoke         # execute UVM lifecycle-to-output smoke test
 make golden-test      # generated tensor fixtures against integrated RTL
 make unit             # directed and randomized RTL testbenches
 make lint             # Verilator lint
@@ -449,6 +453,7 @@ record.
 | [Performance counters](docs/performance_counters.md) | Counter definitions and interpretation |
 | [Compute and bandwidth budget](docs/bandwidth_budget.md) | Tail efficiency and DDR roofline calculations |
 | [Verification matrix](docs/verification_matrix.md) | Coverage, evidence, and outstanding hardware tests |
+| [UVM verification](docs/uvm_verification.md) | Agents, RAL, scoreboard, coverage, tests, and simulator status |
 | [Synthesis experiments](docs/synthesis_experiments.md) | Parallelism and implementation tradeoffs |
 | [Board implementation](docs/board_implementation.md) | Timing, utilization, and generated artifacts |
 | [Bare-metal application](docs/baremetal_app.md) | DMA execution and golden comparison flow |

@@ -9,9 +9,10 @@ The design is verified at multiple levels:
 3. Full-network golden tensor RTL tests
 4. Packetized AXI-stream system tests
 5. AXI-Lite register and performance-counter tests
-6. Vivado synthesis and implementation checks
-7. Vitis bare-metal app build validation
-8. Planned board-level hardware test on Zybo Z7-20
+6. UVM agents, register model, scoreboard, functional coverage, and recovery tests
+7. Vivado synthesis and implementation checks
+8. Vitis bare-metal app build validation
+9. Planned board-level hardware test on Zybo Z7-20
 
 ## Verification Goals
 
@@ -21,6 +22,7 @@ The design is verified at multiple levels:
 | RTL correctness | Validate compute, scratchpad, scheduler, and stream behavior |
 | Packet protocol | Verify packet order, length, headers, TLAST, and error reporting |
 | AXI-Lite protocol | Verify register reads/writes, command pulses, status, and counters |
+| UVM system verification | Verify reusable transaction agents, RAL access, packet scoreboarding, constrained scenarios, recovery, and functional coverage |
 | Zynq integration | Verify PS, AXI DMA, AXI-Lite, AXI-Stream, reset, and clock connectivity |
 | Build reproducibility | Verify complete scripted flow from RTL to XSA/ELF/BOOT.BIN |
 | Timing | Ensure implemented design meets 125 MHz |
@@ -54,6 +56,21 @@ Expected RTL coverage includes:
 - eight-layer execution while recycling two scratchpad-backed parameter banks
 - output backpressure
 - per-layer, DMA-stall, and saturation performance counter snapshots
+
+## UVM Verification
+
+The production system top has a UVM 1.2 environment with active AXI-Lite and
+AXI-Stream ingress agents, a randomized-ready egress agent, packet monitors,
+transaction scoreboard, functional coverage subscribers, virtual sequencer,
+and register block/adapter. Implemented tests cover register access, complete
+model lifecycle and execution, malformed packet recovery, and active-model
+preservation. See [uvm_verification.md](uvm_verification.md).
+
+```bash
+make uvm-compile
+make uvm-smoke
+make uvm-regression
+```
 
 V1 uses ordinary PC/PK channel-tail masks. The first RGB layer is intentionally
 not channel-packed; verification therefore covers the explicit 3-channel tail
@@ -98,6 +115,8 @@ Passing criteria:
 | unit RTL tests | Passing |
 | descriptor-driven controller test | Passing |
 | runtime parameter-bank tests | Passing |
+| UVM source compile and complete DUT elaboration | Passing |
+| UVM executable tests | Pending compatible simulator runtime |
 | Zynq block design | Passing |
 | implementation | Passing |
 | Timing | Met at 125 MHz |

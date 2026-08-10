@@ -51,6 +51,10 @@ jobs:
         run: |
           make regression
 
+      - name: Compile and elaborate UVM environment
+        run: |
+          make uvm-compile
+
       - name: Upload simulation logs
         if: always()
         uses: actions/upload-artifact@v4

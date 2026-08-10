@@ -287,16 +287,20 @@ int cnn_model_parameter_data(const struct cnn_model_view *model,
         !range_valid(model->package_size, layer->bias_offset,
                      layer->bias_size, 1) ||
         layer->weight_offset < model->parameter_data_offset ||
-        layer->bias_offset < model->parameter_data_offset)
+        (layer->bias_size != 0 &&
+         layer->bias_offset < model->parameter_data_offset))
         return CNN_RUNTIME_BAD_PACKAGE;
     parameter_end = (uint64_t)model->parameter_data_offset +
                     model->parameter_data_size;
     weight_end = (uint64_t)layer->weight_offset + layer->weight_size;
-    bias_end = (uint64_t)layer->bias_offset + layer->bias_size;
+    bias_end = layer->bias_size == 0 ? model->parameter_data_offset :
+               (uint64_t)layer->bias_offset + layer->bias_size;
     if (weight_end > parameter_end || bias_end > parameter_end)
         return CNN_RUNTIME_BAD_PACKAGE;
     *weights = model->package + layer->weight_offset;
-    *biases = model->package + layer->bias_offset;
+    *biases = model->package +
+              (layer->bias_size == 0 ? model->parameter_data_offset :
+               layer->bias_offset);
     return CNN_RUNTIME_OK;
 }
 
@@ -372,7 +376,9 @@ int cnn_dma_packet_build(uint8_t *destination, size_t capacity,
 {
     size_t size;
     if (destination == NULL || packet == NULL || packet->payload == NULL ||
-        packet->payload_length == 0)
+        packet->payload_length == 0 ||
+        packet->type < CNN_DMA_PACKET_INPUT_TILE ||
+        packet->type > CNN_DMA_PACKET_OUTPUT_TILE)
         return CNN_RUNTIME_BAD_ARGUMENT;
     size = cnn_dma_packet_size(packet->payload_length);
     if (capacity < size)
@@ -409,7 +415,9 @@ int cnn_dma_packet_parse(const void *source_data, size_t size,
     if (read_u32(source) != CNN_DMA_PACKET_MAGIC ||
         (format & 0xFFu) != CNN_DMA_PACKET_VERSION ||
         ((format >> 8) & 0xFFu) != CNN_DMA_PACKET_HEADER_WORDS ||
-        (format >> 24) != 0 ||
+        (format >> 24) != 0 || ((format >> 16) & 0xFFu) <
+            CNN_DMA_PACKET_INPUT_TILE ||
+        ((format >> 16) & 0xFFu) > CNN_DMA_PACKET_OUTPUT_TILE ||
         payload_length == 0 || size != cnn_dma_packet_size(payload_length))
         return CNN_RUNTIME_BAD_PACKET;
     memset(packet, 0, sizeof(*packet));

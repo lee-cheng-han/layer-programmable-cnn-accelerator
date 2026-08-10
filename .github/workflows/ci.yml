@@ -65,6 +65,10 @@ jobs:
         run: |
           make baremetal-runtime-test
 
+      - name: Test randomized programmable runtime corpus
+        run: |
+          make runtime-corpus-test
+
   rtl_lint:
     name: ci / rtl · verilator lint
     runs-on: ubuntu-24.04
@@ -97,6 +101,10 @@ jobs:
       - name: Run programmable AXI-Lite system test
         run: |
           make programmable-system-test
+
+      - name: Run compiler-derived randomized package RTL test
+        run: |
+          make randomized-package-rtl-test
 
       - name: Run packed DMA protocol test
         run: |

@@ -4,8 +4,8 @@ TB ?= tb_axi_stream_full_network_golden_flow
 VITIS_DATA_DIR ?= $(CURDIR)/build/vitis_data
 
 .PHONY: xsim regression xsim-regression lint clean flow-report report-flow check-warnings docs-check preboard-proof
-.PHONY: unit tile-test programmable-runtime-test programmable-system-test numeric-runtime-test descriptor-test parameter-bank-test programmable-engine-test packed-dma-test packed-dma-runtime-test packed-dma-writer-test model-test model-package-example golden-test synth-sweep synth-report
-.PHONY: top-impl top-report programmable-top-synth programmable-top-impl programmable-top-report baremetal-headers baremetal-runtime-test vitis-app
+.PHONY: unit tile-test programmable-runtime-test programmable-system-test randomized-package-rtl-test uvm-compile uvm-smoke uvm-regression numeric-runtime-test descriptor-test parameter-bank-test programmable-engine-test packed-dma-test packed-dma-runtime-test packed-dma-writer-test model-test model-package-example golden-test synth-sweep synth-report
+.PHONY: top-impl top-report programmable-top-synth programmable-top-impl programmable-top-report baremetal-headers baremetal-runtime-test runtime-corpus-test vitis-app
 .PHONY: zybo-z7-project zybo-z7-bitstream zybo-z7-xsa full-zybo-z7-flow
 .PHONY: boot-image full-preboard-proof program-zybo-z7
 
@@ -35,6 +35,20 @@ numeric-runtime-test:
 
 programmable-system-test:
 	bash scripts/run_programmable_system_tb.sh
+
+randomized-package-rtl-test:
+	bash scripts/run_randomized_programmable_package_tb.sh
+
+uvm-compile:
+	UVM_COMPILE_ONLY=1 bash scripts/run_uvm_xsim.sh
+
+uvm-smoke:
+	UVM_TESTNAME=cnn_uvm_smoke_test bash scripts/run_uvm_xsim.sh
+
+uvm-regression:
+	UVM_TESTNAME=cnn_uvm_register_access_test bash scripts/run_uvm_xsim.sh
+	UVM_TESTNAME=cnn_uvm_protocol_recovery_test bash scripts/run_uvm_xsim.sh
+	UVM_TESTNAME=cnn_uvm_smoke_test bash scripts/run_uvm_xsim.sh
 
 descriptor-test:
 	bash scripts/run_descriptor_controller_tb.sh
@@ -89,6 +103,18 @@ baremetal-runtime-test: model-package-example
 		-Itests/c/xilinx_stubs -Isoftware/zynq_baremetal \
 		-c software/zynq_baremetal/main.c \
 		-o build/host_tests/programmable_main.o
+
+runtime-corpus-test:
+	python3 scripts/generate_runtime_verification_corpus.py \
+		--output build/runtime_corpus --cases 24 --seed 20260809
+	mkdir -p build/host_tests
+	$(CC) -std=c11 -Wall -Wextra -Wpedantic -Werror \
+		-Isoftware/zynq_baremetal \
+		software/zynq_baremetal/cnn_programmable_runtime.c \
+		tests/c/test_programmable_runtime_corpus.c \
+		-o build/host_tests/test_programmable_runtime_corpus
+	build/host_tests/test_programmable_runtime_corpus \
+		build/runtime_corpus/case_*.cnn
 
 vitis-app: baremetal-headers
 	mkdir -p $(VITIS_DATA_DIR)

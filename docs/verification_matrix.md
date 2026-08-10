@@ -9,6 +9,9 @@
 | model | `tests/test_image2image_int8.py` | Passing | bit-accurate Python integer model coverage |
 | default parameters | Gaussian impulse-response test | Passing | all 16 hidden channels used; residual output matches the expected 3x3 low-pass kernel |
 | golden generation | `make baremetal-headers` | Passing | writes deterministic tensors and C DMA packet header |
+| software runtime corpus | `make runtime-corpus-test` | Passing | 24 seeded packages, 1-8 layers, 108 total layers, and 2,792 tiles cross-check compiler packages against the C ABI, tile, packet, and workspace runtime |
+| package-to-RTL numeric flow | `make randomized-package-rtl-test` | Passing | seeded compiler package drives four mixed layers, 26 halo tiles, two-bank parameter recycling, randomized output backpressure, and 268 exact golden packet beats |
+| UVM environment | `make uvm-compile` | Compile/elaboration passing | UVM 1.2 AXI-Lite/stream agents, RAL, scoreboard, functional coverage, virtual sequencing, smoke, register, and recovery tests build with the complete DUT; local XSim snapshot execution is blocked by a reproduced host/runtime exception |
 | compute RTL | `tb_parallel_mac_array` | Covered | PC x PK signed INT8 MAC datapath |
 | post-processing RTL | `tb_parallel_requantizer` | Covered | per-channel multiply/shift, round-half-to-even ties, lane masks, and signed saturation |
 | residual output RTL | `tb_tile_output_serializer_numeric` | Covered | post-quantization INT8 add/subtract, positive/negative saturation, and clipping-event accounting |
@@ -54,8 +57,8 @@
 | packed programmable DMA protocol | High pre-integration | parser/router/bank and output-writer tests with malformed packet recovery |
 | DDR-backed spatial tiling | High pre-integration | directed plus randomized geometry, real halo scratchpad loader, multi-tile 1x1 and 3x3 stride-2 golden output, active DDR metadata, and AXI backpressure |
 | multi-layer tiled execution | High pre-integration | two-layer packed tile flow through reusable parameters, DDR tensor handoff validation, progress, and negative chain rejection |
-| integrated programmable runtime | High pre-board | atomic model activation, descriptor-derived parameter CRC validation, packed tile ingress, real compute, and packed output in one RTL top |
-| programmable AXI-Lite system | High pre-board | AXI-Lite metadata/lifecycle/launch and progress readback wrapped around CRC-checked packed parameter/tile execution |
+| integrated programmable runtime | High pre-board | atomic activation plus a compiler-derived four-layer mixed network with real parameter-bank recycling, 26 tiled inputs, and exact Python-to-RTL packed output comparison |
+| programmable AXI-Lite system | High pre-board | AXI-Lite metadata/lifecycle/launch and progress readback, malformed parameter rejection, active-model-preserving recovery, and deterministic randomized output backpressure |
 | Zynq block design integration | Programmable wrapper selected; Phase 9 rebuild pending | source block design uses the packed programmable top; the current bitstream/XSA predates the completed numeric path |
 | bare-metal DMA integration | High pre-board | package validation, atomic metadata activation, parameter-bank refill, clipped NHWC gather/scatter, packed packet validation, cache maintenance, and strict host compilation; target ELF rebuild pending XSA |
 | real hardware behavior | Pending | board not yet available |
@@ -64,6 +67,10 @@
 
 ```bash
 make model-test
+make baremetal-runtime-test
+make runtime-corpus-test
+make randomized-package-rtl-test
+make uvm-compile
 make descriptor-test
 make parameter-bank-test
 make programmable-engine-test

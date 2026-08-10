@@ -24,7 +24,7 @@ atomically activated, and reused across multiple images.
 | 9 | Complete residual and quantization behavior in runtime RTL | Complete |
 | 10 | Build runtime software and connect interrupts | Polling runtime and board interrupt wiring complete; interrupt-driven scheduling remains |
 | 11 | Add autonomous DDR fetching | Planned |
-| 12 | Expand protocol, randomized, golden, and negative verification | Planned |
+| 12 | Expand protocol, randomized, golden, and negative verification | Complete for pre-board scope |
 | 13 | Optimize performance and validate physical hardware | Planned |
 
 Phase 5 accepts descriptor-driven sequencing through a temporary or
@@ -76,9 +76,10 @@ invalid-chain rejection. The atomically active metadata view exports layer
 tile hints and complete input/output DDR offset/allocation/stride records.
 The portable bare-metal library validates compiled packages, derives the same
 clipped source geometry, gathers and scatters strided NHWC tensors, and
-encodes and validates exact packed DMA packets. Randomized multi-layer payload
-coverage remains. The planner itself has deterministic randomized geometry
-coverage. See [tiled_execution.md](tiled_execution.md).
+encodes and validates exact packed DMA packets. The seeded software corpus and
+compiler-derived four-layer RTL flow now cover randomized multi-layer payloads;
+the planner also has deterministic randomized geometry coverage. See
+[tiled_execution.md](tiled_execution.md).
 
 Phase 9 now resolves each active layer's quantization descriptor, supplies
 per-output-channel signed multipliers, shifts, and zero points to a pipelined
@@ -109,16 +110,19 @@ documented interface or an isolated module.
 
 | Priority | Improvement | Current state | Completion gate |
 |---:|---|---|---|
-| 1 | Converge on one production architecture | In progress; programmable runtime selected by the Zybo block design | Legacy execution RTL and software are retired after programmable bare-metal regression parity |
-| 2 | Complete per-channel quantization | Implemented | Active quantization descriptors drive per-output-channel multiplier/shift, round-half-to-even, saturation, and zero-point checks through the integrated tiled runtime |
-| 3 | Implement DDR tile scheduling | Implemented in portable bare-metal runtime | Board execution proves clipped NHWC gather, DMA submission, output scatter, intermediate tensors, cache maintenance, and timeout recovery |
-| 4 | Strengthen integrated verification | Partial | Deterministic randomized 1-8-layer package-to-output tests cover mixed kernels, strides, padding, tails, backpressure, partial beats, CRC faults, malformed packets, and model replacement |
-| 5 | Improve structured error propagation | Partial | First-failure records identify subsystem, model generation, layer, tensor, tile, field, observed value, and expected range for every programmable-runtime failure |
-| 6 | Add runtime observability | Partial | Per-layer/tile cycles, compute utilization, DMA starvation, output stalls, parameter stalls, bytes, MACs, and saturation events are software-visible and tested |
-| 7 | Run implementation experiments early | Programmable PL top closes two clean OOC physical searches at 125 MHz; board-integrated rerun pending | Programmable board top passes multiple implementation seeds at 125 MHz with positive timing margin and archived timing, utilization, congestion, and critical-path reports |
-| 8 | Harden the software ABI | Partial | One machine-readable schema generates Python, C, and SystemVerilog constants/records; CI checks generated files and compile-time sizes |
-| 9 | Separate fast and licensed CI | Implemented for current scope | Open-source lint/model/docs jobs run on each push; licensed Vivado proof runs separately and publishes simulation/flow evidence |
-| 10 | Produce a final demonstration | Planned | 224x224 and 512x512 examples include input/output images, measured latency/throughput, device view, UART transcript, and ILA evidence |
+| 1 | Close actual RTL tensor chaining | Planned | A behavioral DDR/DMA model scatters each RTL output packet into tensor memory and gathers that stored tensor for the next layer; no Python intermediate tensor is injected after layer zero |
+| 2 | Complete UVM verification and coverage closure | U0 foundation implemented and elaborated | U1-U5 gates cover executable regression, independent DDR/reference checking, mature agents and RAL, constrained-random faults, assertions, traceability, and documented coverage closure |
+| 3 | Improve structured error propagation | Partial | First-failure records identify subsystem, model generation, layer, tensor, tile, packet field, observed value, and expected range for every programmable-runtime failure |
+| 4 | Complete runtime observability | Partial | Per-layer and per-job cycles, MAC-active cycles, input starvation, output backpressure, parameter stalls, bytes, MACs, and saturation events are software-visible and tested |
+| 5 | Expand measurable verification coverage | Baseline complete | CI records coverage across 1-8 layers, both kernels, both strides, all activations and residual modes, asymmetric boundaries, channel tails, partial beats, clipping, and multiple deterministic seeds |
+| 6 | Complete memory and recovery fault campaign | Partial | Tests cover corrupted parameters, stale tensor IDs, packet reordering, aborted jobs, DMA timeout, active-model replacement, and successful rerun without reset |
+| 7 | Harden the software ABI | Partial | One machine-readable schema generates Python, C, and SystemVerilog constants and records; CI checks generated files and compile-time sizes |
+| 8 | Add interrupt-driven scheduling | Planned | DMA and accelerator interrupts advance parameter/tile work without polling, while timeout and error recovery remain deterministic |
+| 9 | Regenerate the production board implementation | Pending current source baseline | The Zybo Z7-20 block design passes multiple clean 125 MHz implementation runs and archives bitstream, XSA, ELF, BOOT.BIN, timing, utilization, congestion, power, and warning reports with hashes |
+| 10 | Validate physical hardware | Board required | UART, ILA, device view, correctness, recovery, and measured 224x224/512x512 performance evidence are archived |
+| 11 | Retire the fixed-network compatibility path | Waiting for board parity | Legacy execution RTL, software, build targets, and documentation are removed only after programmable hardware regression parity |
+| 12 | Add autonomous PL-side DDR fetching | Optional after board baseline | A descriptor-driven AXI master fetches parameters and tiles with bounded bursts, arbitration, timeout, structured recovery, and software fallback |
+| 13 | Produce the final demonstration | Planned | 224x224 and 512x512 examples include input/output images, measured latency and throughput, device view, UART transcript, and ILA evidence |
 
 ### Existing Evidence Mapped To The Plan
 
@@ -129,8 +133,8 @@ documented interface or an isolated module.
   tiled runtime implement per-output-channel fixed-point math,
   round-half-to-even, zero points, signed saturation, and clipping counters.
 - Directed and deterministic-randomized geometry, halo, protocol, controller,
-  parameter-bank, and golden-network tests already provide the base for the
-  expanded randomized campaign.
+  parameter-bank, software-corpus, and compiler-derived golden RTL tests cover
+  the pre-board randomized campaign.
 - Capability records, structured-error snapshots, performance counters,
   warning budgets, synthesis sweeps, separate CI workflows, and generated
   evidence reports already exist. They must be extended to the programmable
@@ -138,20 +142,31 @@ documented interface or an isolated module.
 
 ## Remaining Major Milestones
 
-1. **Programmable control and board integration:** the integrated runtime is
-   bridged to AXI-Lite, selected as the Zybo stream core, connected to DMA with
-   `TKEEP`, and wired to the PS interrupt input alongside both DMA channels.
-   The programmable PL top now retains timing across default and Explore OOC
-   implementations at 125 MHz. The board-integrated implementation remains the
-   final gate for PS, DMA, clock, and external-constraint closure.
-2. **Verification and diagnostics hardening:** add randomized multi-layer
-   package flows, fault recovery, structured programmable errors, and detailed
-   performance counters.
-3. **Programmable board implementation closure:** carry the closed programmable
-   PL top into the Zynq block design, rerun full-board timing, and generate the
-   final bitstream/XSA/BOOT.BIN baseline.
-4. **Physical-board validation and demonstration:** capture correctness,
-   UART/ILA/device evidence, and measured 224x224/512x512 performance.
+1. **Closed-loop DDR/DMA simulation:** replace injected golden intermediate
+   tensors with a behavioral memory path that consumes actual RTL output and
+   supplies it to the next descriptor-driven layer.
+2. **UVM execution and coverage closure:** run the implemented register,
+   lifecycle, scoreboard, and recovery tests on a compatible simulator; then
+   complete independent DDR/reference checking, protocol and RAL maturity,
+   compiler-generated randomized 1-8-layer faults, SVA, traceability, and
+   merged functional coverage closure through stages U1-U5.
+3. **Diagnostics, counters, and ABI generation:** finish structured first-fault
+   records, per-layer performance records, and one-source generation of Python,
+   C, and SystemVerilog ABI definitions.
+4. **Coverage and fault campaign:** run multiple deterministic model seeds and
+   publish functional coverage for kernels, strides, residuals, boundaries,
+   tails, packet faults, DMA timeout, abort, replacement, and recovery.
+5. **Interrupt-driven runtime:** replace the polling-only scheduler path with
+   DMA and accelerator interrupt progression while retaining bounded timeout
+   and recovery behavior.
+6. **Programmable board implementation closure:** rerun the complete Zybo Z7-20
+   block design at 125 MHz and generate hashed bitstream, XSA, ELF, BOOT.BIN,
+   timing, utilization, congestion, power, and warning artifacts.
+7. **Physical-board validation and demonstration:** capture correctness,
+   UART, ILA, device, recovery, and measured 224x224/512x512 evidence; then
+   retire the fixed-network compatibility path.
+8. **Optional autonomous fetching:** consider a PL-side DDR master only after
+   the software-managed board baseline is measured and stable.
 
 ## Final Workflow
 

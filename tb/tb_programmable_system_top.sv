@@ -51,7 +51,7 @@ module tb_programmable_system_top;
   logic [31:0] m_axis_tdata;
   logic [3:0] m_axis_tkeep;
   logic m_axis_tvalid;
-  logic m_axis_tready = 1'b1;
+  logic m_axis_tready = 1'b0;
   logic m_axis_tlast;
   logic irq;
   logic busy;
@@ -61,6 +61,7 @@ module tb_programmable_system_top;
   logic [3:0] captured_keep [0:31];
   logic captured_last [0:31];
   int captured_count = 0;
+  logic [15:0] ready_lfsr = 16'hACE1;
 
   always #5 aclk = ~aclk;
 
@@ -71,6 +72,15 @@ module tb_programmable_system_top;
   ) dut (.*);
 
   always_ff @(posedge aclk) begin
+    if (!aresetn) begin
+      ready_lfsr <= 16'hACE1;
+      m_axis_tready <= 1'b0;
+    end else begin
+      ready_lfsr <= {ready_lfsr[14:0],
+                     ready_lfsr[15] ^ ready_lfsr[13] ^
+                     ready_lfsr[12] ^ ready_lfsr[10]};
+      m_axis_tready <= ready_lfsr[0] | ready_lfsr[2];
+    end
     if (m_axis_tvalid && m_axis_tready) begin
       captured_data[captured_count] <= m_axis_tdata;
       captured_keep[captured_count] <= m_axis_tkeep;
@@ -279,6 +289,23 @@ module tb_programmable_system_top;
     if (value != 501) $fatal(1, "active model ID mismatch");
     axi_read(ADDR_ACTIVE_GENERATION, value);
     if (value != 12) $fatal(1, "active generation mismatch");
+
+    send_packet(DMA_PACKET_LAYER_WEIGHTS, 0, 0, 0, 0,
+                32'h0000_0101, 4'b0011, 1);
+    repeat (4) @(posedge aclk);
+    axi_read(ADDR_STATUS, value);
+    if (!value[2]) $fatal(1, "malformed parameter packet was not rejected");
+    axi_read(ADDR_PACKET_ERRORS, value);
+    if (value != 1) $fatal(1, "malformed packet count mismatch");
+    axi_read(ADDR_ACTIVE_MODEL_ID, value);
+    if (value != 501) $fatal(1, "malformed packet corrupted active model");
+    axi_write(ADDR_CONTROL, 32'd2);
+    repeat (3) @(posedge aclk);
+    axi_read(ADDR_STATUS, value);
+    if (value[2] || !value[4])
+      $fatal(1, "runtime did not recover with active model preserved");
+    axi_read(ADDR_PACKET_ERRORS, value);
+    if (value != 0) $fatal(1, "packet error count did not clear");
 
     send_packet(DMA_PACKET_LAYER_WEIGHTS, 0, 0, 0, 0,
                 32'd1, 4'b0001, 1);

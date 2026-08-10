@@ -59,7 +59,13 @@ gather/scatter path, and board application syntax compile in open-source CI:
 
 ```bash
 make baremetal-runtime-test
+make runtime-corpus-test
 ```
+
+`runtime-corpus-test` compiles and bit-accurately executes 24 deterministic
+mixed networks in Python, then drives every generated package through the C
+descriptor parser, parameter validation, tile planner, NHWC gather/scatter,
+packed packet codec, corruption rejection, and exact output-tile coverage.
 
 After the implemented Zybo XSA exists, build the target ELF with:
 
