@@ -476,6 +476,219 @@ package cnn_uvm_pkg;
     endfunction
   endclass
 
+  class cnn_tensor_layout extends uvm_object;
+    `uvm_object_utils(cnn_tensor_layout)
+    longint unsigned base_address;
+    int unsigned width;
+    int unsigned height;
+    int unsigned channels;
+    int unsigned row_stride;
+    int unsigned pixel_stride;
+    int unsigned channel_stride;
+
+    function new(string name = "cnn_tensor_layout");
+      super.new(name);
+    endfunction
+  endclass
+
+  class cnn_ddr_tensor_model extends uvm_component;
+    `uvm_component_utils(cnn_ddr_tensor_model)
+    uvm_analysis_imp #(cnn_axis_packet, cnn_ddr_tensor_model) output_export;
+    cnn_tensor_layout layouts[int unsigned];
+    byte unsigned memory[longint unsigned];
+    int unsigned output_packet_count[int unsigned];
+    event output_event;
+
+    function new(string name, uvm_component parent);
+      super.new(name, parent);
+      output_export = new("output_export", this);
+    endfunction
+
+    function void configure_tensor(
+      int unsigned tensor_id,
+      longint unsigned base_address,
+      int unsigned width,
+      int unsigned height,
+      int unsigned channels,
+      int unsigned row_stride,
+      int unsigned pixel_stride,
+      int unsigned channel_stride = 1
+    );
+      cnn_tensor_layout layout = cnn_tensor_layout::type_id::create(
+        $sformatf("tensor_%0d_layout", tensor_id));
+      layout.base_address = base_address;
+      layout.width = width;
+      layout.height = height;
+      layout.channels = channels;
+      layout.row_stride = row_stride;
+      layout.pixel_stride = pixel_stride;
+      layout.channel_stride = channel_stride;
+      layouts[tensor_id] = layout;
+    endfunction
+
+    function longint unsigned element_address(
+      cnn_tensor_layout layout,
+      int unsigned y,
+      int unsigned x,
+      int unsigned channel
+    );
+      return layout.base_address + y * layout.row_stride +
+             x * layout.pixel_stride + channel * layout.channel_stride;
+    endfunction
+
+    function void write(cnn_axis_packet packet);
+      cnn_tensor_layout layout;
+      int unsigned expected_bytes;
+      int unsigned payload_index;
+      longint unsigned address;
+      if ((packet.packet_type != 4) || !layouts.exists(packet.tensor_id)) return;
+      layout = layouts[packet.tensor_id];
+      if ((packet.tile_x + packet.tile_width > layout.width) ||
+          (packet.tile_y + packet.tile_height > layout.height) ||
+          (packet.channel_offset + packet.channel_count > layout.channels)) begin
+        `uvm_error("DDR_MODEL", "output tile exceeds configured tensor bounds")
+        return;
+      end
+      expected_bytes = packet.tile_width * packet.tile_height *
+                       packet.channel_count;
+      if (packet.payload.size() != expected_bytes) begin
+        `uvm_error("DDR_MODEL", $sformatf(
+          "tensor %0d payload length got=%0d expected=%0d",
+          packet.tensor_id, packet.payload.size(), expected_bytes))
+        return;
+      end
+      payload_index = 0;
+      for (int y = 0; y < packet.tile_height; y++) begin
+        for (int x = 0; x < packet.tile_width; x++) begin
+          for (int channel = 0; channel < packet.channel_count; channel++) begin
+            address = element_address(layout, packet.tile_y + y,
+                                      packet.tile_x + x,
+                                      packet.channel_offset + channel);
+            memory[address] = packet.payload[payload_index++];
+          end
+        end
+      end
+      output_packet_count[packet.tensor_id]++;
+      ->output_event;
+    endfunction
+
+    task wait_for_tensor_packets(int unsigned tensor_id, int unsigned count,
+                                 time timeout);
+      fork
+        begin
+          while (!output_packet_count.exists(tensor_id) ||
+                 (output_packet_count[tensor_id] < count)) @output_event;
+        end
+        begin
+          #(timeout);
+          `uvm_fatal("DDR_TIMEOUT", $sformatf(
+            "timed out waiting for tensor %0d packet %0d", tensor_id, count))
+        end
+      join_any
+      disable fork;
+    endtask
+
+    function cnn_axis_packet gather_activation(
+      int unsigned tensor_id,
+      bit [31:0] job_id,
+      int unsigned layer_id,
+      int unsigned tile_x,
+      int unsigned tile_y,
+      int unsigned tile_width,
+      int unsigned tile_height,
+      int unsigned channel_offset,
+      int unsigned channel_count
+    );
+      cnn_axis_packet packet;
+      cnn_tensor_layout layout;
+      int unsigned payload_index;
+      longint unsigned address;
+      packet = cnn_axis_packet::type_id::create("ddr_gathered_activation");
+      if (!layouts.exists(tensor_id)) begin
+        `uvm_fatal("DDR_MODEL", $sformatf("tensor %0d is not configured", tensor_id))
+        return packet;
+      end
+      layout = layouts[tensor_id];
+      if ((tile_x + tile_width > layout.width) ||
+          (tile_y + tile_height > layout.height) ||
+          (channel_offset + channel_count > layout.channels)) begin
+        `uvm_fatal("DDR_MODEL", "activation gather exceeds configured tensor bounds")
+        return packet;
+      end
+      packet.packet_type = 1;
+      packet.job_id = job_id;
+      packet.tensor_id = tensor_id;
+      packet.layer_id = layer_id;
+      packet.tile_x = tile_x;
+      packet.tile_y = tile_y;
+      packet.tile_width = tile_width;
+      packet.tile_height = tile_height;
+      packet.channel_offset = channel_offset;
+      packet.channel_count = channel_count;
+      packet.payload = new[tile_width * tile_height * channel_count];
+      payload_index = 0;
+      for (int y = 0; y < tile_height; y++) begin
+        for (int x = 0; x < tile_width; x++) begin
+          for (int channel = 0; channel < channel_count; channel++) begin
+            address = element_address(layout, tile_y + y, tile_x + x,
+                                      channel_offset + channel);
+            if (!memory.exists(address)) begin
+              `uvm_fatal("DDR_MODEL", $sformatf(
+                "read before write tensor=%0d y=%0d x=%0d channel=%0d",
+                tensor_id, tile_y + y, tile_x + x,
+                channel_offset + channel))
+              return packet;
+            end
+            packet.payload[payload_index++] = memory[address];
+          end
+        end
+      end
+      return packet;
+    endfunction
+
+    function bit compare_tensor(int unsigned tensor_id,
+                                byte unsigned expected[],
+                                output string reason);
+      cnn_tensor_layout layout;
+      int unsigned expected_elements;
+      int unsigned index;
+      longint unsigned address;
+      if (!layouts.exists(tensor_id)) begin
+        reason = $sformatf("tensor %0d is not configured", tensor_id);
+        return 0;
+      end
+      layout = layouts[tensor_id];
+      expected_elements = layout.width * layout.height * layout.channels;
+      if (expected.size() != expected_elements) begin
+        reason = $sformatf("expected tensor size got=%0d required=%0d",
+                           expected.size(), expected_elements);
+        return 0;
+      end
+      index = 0;
+      for (int y = 0; y < layout.height; y++) begin
+        for (int x = 0; x < layout.width; x++) begin
+          for (int channel = 0; channel < layout.channels; channel++) begin
+            address = element_address(layout, y, x, channel);
+            if (!memory.exists(address)) begin
+              reason = $sformatf("tensor byte missing at y=%0d x=%0d channel=%0d",
+                                 y, x, channel);
+              return 0;
+            end
+            if (memory[address] != expected[index]) begin
+              reason = $sformatf(
+                "tensor mismatch y=%0d x=%0d channel=%0d got=%02x expected=%02x",
+                y, x, channel, memory[address], expected[index]);
+              return 0;
+            end
+            index++;
+          end
+        end
+      end
+      reason = "";
+      return 1;
+    endfunction
+  endclass
+
   class cnn_packet_coverage extends uvm_subscriber #(cnn_axis_packet);
     `uvm_component_utils(cnn_packet_coverage)
     cnn_axis_packet sampled;
@@ -610,6 +823,7 @@ package cnn_uvm_pkg;
     cnn_axis_source_agent input_agent;
     cnn_axis_sink_agent output_agent;
     cnn_packet_scoreboard scoreboard;
+    cnn_ddr_tensor_model ddr_model;
     cnn_packet_coverage input_coverage;
     cnn_packet_coverage output_coverage;
     cnn_axi_coverage axi_coverage;
@@ -624,6 +838,7 @@ package cnn_uvm_pkg;
       input_agent = cnn_axis_source_agent::type_id::create("input_agent", this);
       output_agent = cnn_axis_sink_agent::type_id::create("output_agent", this);
       scoreboard = cnn_packet_scoreboard::type_id::create("scoreboard", this);
+      ddr_model = cnn_ddr_tensor_model::type_id::create("ddr_model", this);
       input_coverage = cnn_packet_coverage::type_id::create("input_coverage", this);
       output_coverage = cnn_packet_coverage::type_id::create("output_coverage", this);
       axi_coverage = cnn_axi_coverage::type_id::create("axi_coverage", this);
@@ -640,6 +855,7 @@ package cnn_uvm_pkg;
       input_agent.monitor.analysis_port.connect(input_coverage.analysis_export);
       output_agent.monitor.analysis_port.connect(output_coverage.analysis_export);
       output_agent.monitor.analysis_port.connect(scoreboard.actual_export);
+      output_agent.monitor.analysis_port.connect(ddr_model.output_export);
     endfunction
   endclass
 

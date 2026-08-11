@@ -326,7 +326,8 @@ make runtime-corpus-test # seeded 1-8-layer Python/C runtime verification
 make randomized-package-rtl-test # compiler package through four-layer RTL runtime
 make uvm-compile       # compile/elaborate production UVM environment with XSim
 make uvm-smoke         # execute UVM lifecycle-to-output smoke test
-make uvm-regression    # execute register, recovery, and smoke UVM tests
+make uvm-closed-loop   # reuse observed RTL output through behavioral DDR
+make uvm-regression    # execute all production UVM tests
 make golden-test      # generated tensor fixtures against integrated RTL
 make unit             # directed and randomized RTL testbenches
 make lint             # Verilator lint

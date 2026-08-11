@@ -33,6 +33,7 @@ cnn_uvm_base_test
       |   +-- packet monitor -> scoreboard + packet coverage
       |
       +-- packet scoreboard
+      +-- byte-addressed DDR tensor model
       +-- virtual sequencer
       +-- UVM register block and AXI adapter
 ```
@@ -49,6 +50,7 @@ are repeatable.
 | `cnn_uvm_register_access_test` | Read/write register access, version discovery, and invalid-address `SLVERR` |
 | `cnn_uvm_smoke_test` | Model load, metadata commit, validation, atomic activation, parameter load, tiled execution, randomized output backpressure, and packet scoreboard |
 | `cnn_uvm_protocol_recovery_test` | Malformed parameter length rejection, packet-error counting, active-model preservation, clear, and successful rerun |
+| `cnn_uvm_closed_loop_ddr_test` | Two-layer execution where observed layer-0 RTL output is scattered into strided DDR tensor memory, gathered as layer-1 input, and checked as a complete final tensor |
 
 Run source compilation and complete UVM elaboration:
 
@@ -60,6 +62,7 @@ Run an executable test on a working XSim UVM installation:
 
 ```bash
 make uvm-smoke
+make uvm-closed-loop
 UVM_TESTNAME=cnn_uvm_protocol_recovery_test bash scripts/run_uvm_xsim.sh
 ```
 
@@ -77,8 +80,8 @@ an equivalent compile script.
 
 Vivado/XSim 2026.1 on the current host compiles every UVM source, elaborates the
 complete programmable DUT, and executes the register-access, protocol-recovery,
-and end-to-end smoke tests. `make uvm-regression` completes with zero UVM errors
-and zero UVM fatals in all three tests.
+end-to-end smoke, and closed-loop DDR tests. `make uvm-regression` completes
+with zero UVM errors and zero UVM fatals in all four tests.
 
 ## Coverage Model
 
@@ -99,8 +102,8 @@ Implemented coverpoints include:
 | Stage | Deliverable | Current status | Completion gate |
 |---:|---|---|---|
 | U0 | Reusable UVM foundation | Complete | Production DUT, agents, monitors, RAL foundation, scoreboard, coverage, virtual sequencer, and tests compile and elaborate |
-| U1 | Executable regression | Complete locally | Register, smoke, and recovery tests produce zero-error UVM summaries; CI artifact and seed archival remain to be added |
-| U2 | Independent closed-loop checking | Planned | Actual RTL output is stored in behavioral DDR, reused by the next layer, and compared against the independent Python/DPI-C reference model |
+| U1 | Executable regression | Complete locally | Register, smoke, recovery, and closed-loop DDR tests produce zero-error UVM summaries; CI artifact and seed archival remain to be added |
+| U2 | Independent closed-loop checking | DDR chaining complete; independent reference pending | Actual RTL output is stored in behavioral DDR and reused by the next layer; compiler-generated Python/DPI-C whole-tensor reference comparison remains |
 | U3 | Protocol and RAL maturity | Planned | AXI timing variation, protocol validation, complete register model, predictor, mirrors, reset values, access policies, and byte strobes are covered |
 | U4 | Constrained-random and fault campaign | Planned | Compiler-generated 1-8-layer sequences cover legal combinations plus reset, abort, corruption, reordering, timeout, replacement, interrupt, residual, and saturation faults |
 | U5 | Coverage closure and signoff | Planned | Functional and assertion coverage are merged in CI, requirements map to tests and coverpoints, exclusions are reviewed, and all closure targets are met |
@@ -118,8 +121,8 @@ Implemented coverpoints include:
 
 ### Independent End-To-End Checking
 
-4. Add a behavioral DDR/DMA memory model that scatters actual RTL output packets
-   and gathers the stored tensor for the next layer.
+4. Extend the implemented behavioral DDR tensor model to cover padded strides,
+   channel tails, overlapping legal lifetimes, and multi-channel tiles.
 5. Connect the Python bit-accurate executor through generated transaction files
    or DPI-C and compare complete tensor memory, not only packet-local payloads.
 6. Generate model lifecycle, metadata, parameter, and tile sequences directly

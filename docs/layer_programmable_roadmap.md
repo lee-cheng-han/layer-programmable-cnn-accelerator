@@ -110,8 +110,8 @@ documented interface or an isolated module.
 
 | Priority | Improvement | Current state | Completion gate |
 |---:|---|---|---|
-| 1 | Close actual RTL tensor chaining | Planned | A behavioral DDR/DMA model scatters each RTL output packet into tensor memory and gathers that stored tensor for the next layer; no Python intermediate tensor is injected after layer zero |
-| 2 | Complete UVM verification and coverage closure | U0 foundation implemented and elaborated | U1-U5 gates cover executable regression, independent DDR/reference checking, mature agents and RAL, constrained-random faults, assertions, traceability, and documented coverage closure |
+| 1 | Close actual RTL tensor chaining | Implemented | The UVM DDR model scatters observed RTL output packets into strided tensor memory and gathers that memory for the next layer; the two-layer test injects no intermediate golden tensor |
+| 2 | Complete UVM verification and coverage closure | U0-U1 complete; U2 DDR chaining complete | Remaining U2-U5 gates add an independent compiler reference, mature agents and RAL, constrained-random faults, assertions, traceability, and documented coverage closure |
 | 3 | Improve structured error propagation | Partial | First-failure records identify subsystem, model generation, layer, tensor, tile, packet field, observed value, and expected range for every programmable-runtime failure |
 | 4 | Complete runtime observability | Partial | Per-layer and per-job cycles, MAC-active cycles, input starvation, output backpressure, parameter stalls, bytes, MACs, and saturation events are software-visible and tested |
 | 5 | Expand measurable verification coverage | Baseline complete | CI records coverage across 1-8 layers, both kernels, both strides, all activations and residual modes, asymmetric boundaries, channel tails, partial beats, clipping, and multiple deterministic seeds |
@@ -142,30 +142,27 @@ documented interface or an isolated module.
 
 ## Remaining Major Milestones
 
-1. **Closed-loop DDR/DMA simulation:** replace injected golden intermediate
-   tensors with a behavioral memory path that consumes actual RTL output and
-   supplies it to the next descriptor-driven layer.
-2. **UVM execution and coverage closure:** run the implemented register,
-   lifecycle, scoreboard, and recovery tests on a compatible simulator; then
-   complete independent DDR/reference checking, protocol and RAL maturity,
+1. **UVM reference and coverage closure:** build on the passing register,
+   lifecycle, recovery, smoke, and closed-loop DDR tests to complete independent
+   compiler-reference checking, protocol and RAL maturity,
    compiler-generated randomized 1-8-layer faults, SVA, traceability, and
    merged functional coverage closure through stages U1-U5.
-3. **Diagnostics, counters, and ABI generation:** finish structured first-fault
+2. **Diagnostics, counters, and ABI generation:** finish structured first-fault
    records, per-layer performance records, and one-source generation of Python,
    C, and SystemVerilog ABI definitions.
-4. **Coverage and fault campaign:** run multiple deterministic model seeds and
+3. **Coverage and fault campaign:** run multiple deterministic model seeds and
    publish functional coverage for kernels, strides, residuals, boundaries,
    tails, packet faults, DMA timeout, abort, replacement, and recovery.
-5. **Interrupt-driven runtime:** replace the polling-only scheduler path with
+4. **Interrupt-driven runtime:** replace the polling-only scheduler path with
    DMA and accelerator interrupt progression while retaining bounded timeout
    and recovery behavior.
-6. **Programmable board implementation closure:** rerun the complete Zybo Z7-20
+5. **Programmable board implementation closure:** rerun the complete Zybo Z7-20
    block design at 125 MHz and generate hashed bitstream, XSA, ELF, BOOT.BIN,
    timing, utilization, congestion, power, and warning artifacts.
-7. **Physical-board validation and demonstration:** capture correctness,
+6. **Physical-board validation and demonstration:** capture correctness,
    UART, ILA, device, recovery, and measured 224x224/512x512 evidence; then
    retire the fixed-network compatibility path.
-8. **Optional autonomous fetching:** consider a PL-side DDR master only after
+7. **Optional autonomous fetching:** consider a PL-side DDR master only after
    the software-managed board baseline is measured and stable.
 
 ## Final Workflow

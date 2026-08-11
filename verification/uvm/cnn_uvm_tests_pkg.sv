@@ -168,6 +168,62 @@ package cnn_uvm_tests_pkg;
       axi_write(ADDR_MODEL_COMMAND, 8);
     endtask
 
+    task load_two_layer_identity_model();
+      bit [31:0] parameter_crc =
+        crc32_byte(32'hFFFF_FFFF, 8'd1) ^ 32'hFFFF_FFFF;
+      axi_write(ADDR_JOB_ID, 99);
+      axi_write(ADDR_PARAMETER_LAYER, 0);
+      axi_write(ADDR_MODEL_COMMAND, 1);
+      write_metadata(0, 0, 0, 32'h314E_4E43);
+      write_metadata(0, 0, 1, 32'h0080_0001);
+      write_metadata(0, 0, 4, 502);
+      write_metadata(0, 0, 5, 12);
+      write_metadata(0, 0, 6, 32'h0003_0002);
+      write_metadata(0, 0, 7, 32'h0000_0001);
+      commit_metadata(0, 0);
+      for (int layer = 0; layer < 2; layer++) begin
+        write_metadata(1, layer, 0, 32'h0080_0001);
+        write_metadata(1, layer, 1, {16'd1, 16'(layer)});
+        write_metadata(1, layer, 2, layer == 1 ? 32'h0000_0002 : 0);
+        write_metadata(1, layer, 3,
+                       {16'(layer + 1), 16'(layer)});
+        write_metadata(1, layer, 4, 32'h0000_FFFF);
+        write_metadata(1, layer, 6, 1);
+        write_metadata(1, layer, 8, 0);
+        write_metadata(1, layer, 9, parameter_crc);
+        write_metadata(1, layer, 10, 32'h0101_0101);
+        write_metadata(1, layer, 11, 0);
+        write_metadata(1, layer, 12, 32'h0000_0101);
+        write_metadata(1, layer, 13, 32'h0002_0002);
+        commit_metadata(1, layer);
+      end
+      for (int tensor = 0; tensor < 3; tensor++) begin
+        bit [15:0] flags = tensor == 0 ? 16'd1 :
+                           tensor == 2 ? 16'd2 : 16'd0;
+        write_metadata(2, tensor, 0, 32'h0040_0001);
+        write_metadata(2, tensor, 1, {flags, 16'(tensor)});
+        write_metadata(2, tensor, 2, 32'h1000 * (tensor + 1));
+        write_metadata(2, tensor, 3, 0);
+        write_metadata(2, tensor, 4, 6);
+        write_metadata(2, tensor, 5, 32'h0002_0003);
+        write_metadata(2, tensor, 6, 32'h0101_0001);
+        write_metadata(2, tensor, 7, 0);
+        write_metadata(2, tensor, 9, 3);
+        write_metadata(2, tensor, 10, 1);
+        write_metadata(2, tensor, 11, 1);
+        commit_metadata(2, tensor);
+      end
+      write_metadata(3, 0, 0, 32'h00C0_0001);
+      write_metadata(3, 0, 1, 0);
+      write_metadata(3, 0, 2, 32'h0001_0001);
+      write_metadata(3, 0, 16, 1);
+      write_metadata(3, 0, 17, 0);
+      commit_metadata(3, 0);
+      axi_write(ADDR_MODEL_COMMAND, 2);
+      axi_write(ADDR_MODEL_COMMAND, 4);
+      axi_write(ADDR_MODEL_COMMAND, 8);
+    endtask
+
     function cnn_axis_packet make_packet(byte packet_type, int tensor_id,
                                          int layer_id, int tile_x,
                                          int tile_width,
@@ -204,6 +260,21 @@ package cnn_uvm_tests_pkg;
         if (value[1:0] != 0) return;
       end
       `uvm_fatal("PARAMETER", "parameter bank did not become valid")
+    endtask
+
+    task preload_parameter_layer(int layer);
+      byte unsigned weight[] = new[1];
+      bit [31:0] value;
+      weight[0] = 1;
+      axi_write(ADDR_PARAMETER_LAYER, layer);
+      send_packet(make_packet(2, 0, layer, 0, 0, weight));
+      for (int poll = 0; poll < 100; poll++) begin
+        checked_read(ADDR_PARAMETER_BANKS, value);
+        if ((layer == 0 && value[1:0] != 0) ||
+            (layer != 0 && value[1:0] == 2'b11)) return;
+      end
+      `uvm_fatal("PARAMETER", $sformatf(
+        "parameter layer %0d did not become valid", layer))
     endtask
 
     task run_valid_job();
@@ -265,6 +336,50 @@ package cnn_uvm_tests_pkg;
       axi_write(ADDR_CONTROL, 2);
       preload_parameters();
       run_valid_job();
+      phase.drop_objection(this);
+    endtask
+  endclass
+
+  class cnn_uvm_closed_loop_ddr_test extends cnn_uvm_base_test;
+    `uvm_component_utils(cnn_uvm_closed_loop_ddr_test)
+    function new(string name, uvm_component parent); super.new(name, parent); endfunction
+    task run_phase(uvm_phase phase);
+      byte unsigned input0[] = '{1, 2, 4, 5};
+      byte unsigned input1[] = '{3, 6};
+      byte unsigned final_tensor[] = '{1, 2, 3, 4, 5, 6};
+      cnn_axis_packet expected;
+      cnn_axis_packet gathered;
+      bit [31:0] value;
+      string reason;
+      phase.raise_objection(this);
+      load_two_layer_identity_model();
+      env.ddr_model.configure_tensor(1, 64'h2000, 3, 2, 1, 3, 1);
+      env.ddr_model.configure_tensor(2, 64'h3000, 3, 2, 1, 3, 1);
+      preload_parameter_layer(0);
+      preload_parameter_layer(1);
+      expected = make_packet(4, 1, 0, 0, 2, input0);
+      env.scoreboard.enqueue_expected(expected);
+      expected = make_packet(4, 1, 0, 2, 1, input1);
+      env.scoreboard.enqueue_expected(expected);
+      expected = make_packet(4, 2, 1, 0, 2, input0);
+      env.scoreboard.enqueue_expected(expected);
+      expected = make_packet(4, 2, 1, 2, 1, input1);
+      env.scoreboard.enqueue_expected(expected);
+      axi_write(ADDR_CONTROL, 1);
+      send_packet(make_packet(1, 0, 0, 0, 2, input0));
+      send_packet(make_packet(1, 0, 0, 2, 1, input1));
+      env.ddr_model.wait_for_tensor_packets(1, 2, 200us);
+      gathered = env.ddr_model.gather_activation(1, 99, 1, 0, 0, 2, 2, 0, 1);
+      send_packet(gathered);
+      gathered = env.ddr_model.gather_activation(1, 99, 1, 2, 0, 1, 2, 0, 1);
+      send_packet(gathered);
+      env.scoreboard.wait_for_matches(4, 200us);
+      if (!env.ddr_model.compare_tensor(2, final_tensor, reason))
+        `uvm_fatal("DDR_COMPARE", reason)
+      checked_read(ADDR_STATUS, value);
+      if (value[2]) `uvm_fatal("RUNTIME", "closed-loop job reported error")
+      checked_read(ADDR_COMPLETED_LAYERS, value);
+      if (value != 2) `uvm_fatal("RUNTIME", "closed-loop layer count mismatch")
       phase.drop_objection(this);
     endtask
   endclass

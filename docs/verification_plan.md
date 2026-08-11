@@ -69,6 +69,7 @@ preservation. See [uvm_verification.md](uvm_verification.md).
 ```bash
 make uvm-compile
 make uvm-smoke
+make uvm-closed-loop
 make uvm-regression
 ```
 
