@@ -70,6 +70,7 @@ preservation. See [uvm_verification.md](uvm_verification.md).
 make uvm-compile
 make uvm-smoke
 make uvm-closed-loop
+make uvm-compiler-reference
 make uvm-regression
 ```
 

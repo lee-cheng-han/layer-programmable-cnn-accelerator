@@ -111,7 +111,7 @@ documented interface or an isolated module.
 | Priority | Improvement | Current state | Completion gate |
 |---:|---|---|---|
 | 1 | Close actual RTL tensor chaining | Implemented | The UVM DDR model scatters observed RTL output packets into strided tensor memory and gathers that memory for the next layer; the two-layer test injects no intermediate golden tensor |
-| 2 | Complete UVM verification and coverage closure | U0-U1 complete; U2 DDR chaining complete | Remaining U2-U5 gates add an independent compiler reference, mature agents and RAL, constrained-random faults, assertions, traceability, and documented coverage closure |
+| 2 | Complete UVM verification and coverage closure | U0-U2 complete for directed scope | Remaining U3-U5 gates add mature agents and RAL, constrained-random faults, assertions, traceability, and documented coverage closure |
 | 3 | Improve structured error propagation | Partial | First-failure records identify subsystem, model generation, layer, tensor, tile, packet field, observed value, and expected range for every programmable-runtime failure |
 | 4 | Complete runtime observability | Partial | Per-layer and per-job cycles, MAC-active cycles, input starvation, output backpressure, parameter stalls, bytes, MACs, and saturation events are software-visible and tested |
 | 5 | Expand measurable verification coverage | Baseline complete | CI records coverage across 1-8 layers, both kernels, both strides, all activations and residual modes, asymmetric boundaries, channel tails, partial beats, clipping, and multiple deterministic seeds |
@@ -142,11 +142,11 @@ documented interface or an isolated module.
 
 ## Remaining Major Milestones
 
-1. **UVM reference and coverage closure:** build on the passing register,
-   lifecycle, recovery, smoke, and closed-loop DDR tests to complete independent
-   compiler-reference checking, protocol and RAL maturity,
-   compiler-generated randomized 1-8-layer faults, SVA, traceability, and
-   merged functional coverage closure through stages U1-U5.
+1. **UVM protocol and coverage closure:** build on the passing register,
+   lifecycle, recovery, smoke, closed-loop DDR, and compiler-reference tests to
+   complete protocol and RAL maturity, compiler-generated randomized 1-8-layer
+   faults, SVA, traceability, and merged functional coverage closure through
+   stages U3-U5.
 2. **Diagnostics, counters, and ABI generation:** finish structured first-fault
    records, per-layer performance records, and one-source generation of Python,
    C, and SystemVerilog ABI definitions.

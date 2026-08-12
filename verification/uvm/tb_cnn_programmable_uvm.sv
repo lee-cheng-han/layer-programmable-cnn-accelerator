@@ -21,7 +21,7 @@ module tb_cnn_programmable_uvm;
 
   cnn_programmable_system_top #(
     .PC(2), .PK(2), .MAX_CIN(2), .MAX_COUT(2),
-    .MAX_LAYERS(2), .MAX_TENSORS(4), .MAX_QUANTIZATIONS(2),
+    .MAX_LAYERS(2), .MAX_TENSORS(4), .MAX_QUANTIZATIONS(3),
     .MAX_TILE_WIDTH(2), .MAX_TILE_HEIGHT(2)
   ) dut (
     .aclk(aclk), .aresetn(aresetn),

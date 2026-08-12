@@ -11,7 +11,7 @@
 | golden generation | `make baremetal-headers` | Passing | writes deterministic tensors and C DMA packet header |
 | software runtime corpus | `make runtime-corpus-test` | Passing | 24 seeded packages, 1-8 layers, 108 total layers, and 2,792 tiles cross-check compiler packages against the C ABI, tile, packet, and workspace runtime |
 | package-to-RTL numeric flow | `make randomized-package-rtl-test` | Passing | seeded compiler package drives four mixed layers, 26 halo tiles, two-bank parameter recycling, randomized output backpressure, and 268 exact golden packet beats |
-| UVM environment | `make uvm-regression` | Passing on XSim 2026.1 | UVM 1.2 AXI-Lite/stream agents, RAL, scoreboard, functional coverage, virtual sequencing, byte-addressed DDR tensor model, and complete DUT; register, recovery, smoke, and closed-loop tests finish with zero UVM errors or fatals |
+| UVM environment | `make uvm-regression` | Passing on XSim 2026.1 | Five UVM 1.2 tests cover register access, recovery, smoke execution, DDR chaining, and a compiler-produced mixed 3x3-to-1x1 package checked against the independent Python executor; all finish with zero UVM errors or fatals |
 | compute RTL | `tb_parallel_mac_array` | Covered | PC x PK signed INT8 MAC datapath |
 | post-processing RTL | `tb_parallel_requantizer` | Covered | per-channel multiply/shift, round-half-to-even ties, lane masks, and signed saturation |
 | residual output RTL | `tb_tile_output_serializer_numeric` | Covered | post-quantization INT8 add/subtract, positive/negative saturation, and clipping-event accounting |
@@ -56,7 +56,7 @@
 | reusable runtime parameters | High pre-integration | bank-level negative tests plus integrated eight-layer scratchpad-backed execution |
 | packed programmable DMA protocol | High pre-integration | parser/router/bank and output-writer tests with malformed packet recovery |
 | DDR-backed spatial tiling | High pre-integration | directed plus randomized geometry, real halo scratchpad loader, multi-tile 1x1 and 3x3 stride-2 golden output, active DDR metadata, and AXI backpressure |
-| multi-layer tiled execution | High pre-integration | two-layer packed tile flow through reusable parameters plus a UVM closed loop that scatters actual layer-0 RTL output into DDR tensor memory and gathers it for layer 1; progress and negative chain rejection are covered |
+| multi-layer tiled execution | High pre-integration | two-layer packed tile flow through reusable parameters plus UVM closed loops that scatter actual layer-0 RTL output into DDR tensor memory and gather it for layer 1; the compiler-reference test checks a mixed 3x3-to-1x1 final tensor against Python, while progress and negative chain rejection are covered |
 | integrated programmable runtime | High pre-board | atomic activation plus a compiler-derived four-layer mixed network with real parameter-bank recycling, 26 tiled inputs, and exact Python-to-RTL packed output comparison |
 | programmable AXI-Lite system | High pre-board | AXI-Lite metadata/lifecycle/launch and progress readback, malformed parameter rejection, active-model-preserving recovery, and deterministic randomized output backpressure |
 | Zynq block design integration | Programmable wrapper selected; Phase 9 rebuild pending | source block design uses the packed programmable top; the current bitstream/XSA predates the completed numeric path |

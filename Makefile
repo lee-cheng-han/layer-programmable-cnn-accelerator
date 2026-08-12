@@ -8,7 +8,7 @@ XSCT ?= $(shell command -v xsct 2>/dev/null || printf '%s' '$(HOME)/Xilinx/2026.
 BOOTGEN ?= $(shell command -v bootgen 2>/dev/null || printf '%s' '$(HOME)/Xilinx/2026.1/Vitis/bin/bootgen')
 
 .PHONY: xsim regression xsim-regression lint clean flow-report report-flow check-warnings docs-check preboard-proof
-.PHONY: unit tile-test programmable-runtime-test programmable-system-test randomized-package-rtl-test uvm-compile uvm-smoke uvm-closed-loop uvm-regression numeric-runtime-test descriptor-test parameter-bank-test programmable-engine-test packed-dma-test packed-dma-runtime-test packed-dma-writer-test model-test model-package-example golden-test synth-sweep synth-report
+.PHONY: unit tile-test programmable-runtime-test programmable-system-test randomized-package-rtl-test uvm-compile uvm-smoke uvm-closed-loop uvm-compiler-reference uvm-regression numeric-runtime-test descriptor-test parameter-bank-test programmable-engine-test packed-dma-test packed-dma-runtime-test packed-dma-writer-test model-test model-package-example golden-test synth-sweep synth-report
 .PHONY: top-impl top-report programmable-top-synth programmable-top-impl programmable-top-report baremetal-headers baremetal-runtime-test runtime-corpus-test vitis-app
 .PHONY: zybo-z7-project zybo-z7-bitstream zybo-z7-xsa full-zybo-z7-flow
 .PHONY: boot-image full-preboard-proof program-zybo-z7
@@ -52,11 +52,15 @@ uvm-smoke:
 uvm-closed-loop:
 	UVM_TESTNAME=cnn_uvm_closed_loop_ddr_test bash scripts/run_uvm_xsim.sh
 
+uvm-compiler-reference:
+	UVM_TESTNAME=cnn_uvm_compiler_reference_test bash scripts/run_uvm_xsim.sh
+
 uvm-regression:
 	UVM_TESTNAME=cnn_uvm_register_access_test bash scripts/run_uvm_xsim.sh
 	UVM_TESTNAME=cnn_uvm_protocol_recovery_test bash scripts/run_uvm_xsim.sh
 	UVM_TESTNAME=cnn_uvm_smoke_test bash scripts/run_uvm_xsim.sh
 	UVM_TESTNAME=cnn_uvm_closed_loop_ddr_test bash scripts/run_uvm_xsim.sh
+	UVM_TESTNAME=cnn_uvm_compiler_reference_test bash scripts/run_uvm_xsim.sh
 
 descriptor-test:
 	bash scripts/run_descriptor_controller_tb.sh

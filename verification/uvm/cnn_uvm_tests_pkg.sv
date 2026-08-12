@@ -2,6 +2,7 @@ package cnn_uvm_tests_pkg;
   import uvm_pkg::*;
   import cnn_uvm_pkg::*;
   `include "uvm_macros.svh"
+  `include "uvm_closed_loop_fixture.svh"
 
   class cnn_axi_single_sequence extends uvm_sequence #(cnn_axi_lite_item);
     `uvm_object_utils(cnn_axi_single_sequence)
@@ -380,6 +381,236 @@ package cnn_uvm_tests_pkg;
       if (value[2]) `uvm_fatal("RUNTIME", "closed-loop job reported error")
       checked_read(ADDR_COMPLETED_LAYERS, value);
       if (value != 2) `uvm_fatal("RUNTIME", "closed-loop layer count mismatch")
+      phase.drop_objection(this);
+    endtask
+  endclass
+
+  class cnn_uvm_compiler_reference_test extends cnn_uvm_base_test;
+    `uvm_component_utils(cnn_uvm_compiler_reference_test)
+    bit metadata_action_mem[UVM_FIXTURE_METADATA_OPS];
+    bit [1:0] metadata_kind_mem[UVM_FIXTURE_METADATA_OPS];
+    bit [5:0] metadata_record_mem[UVM_FIXTURE_METADATA_OPS];
+    bit [5:0] metadata_word_mem[UVM_FIXTURE_METADATA_OPS];
+    bit [31:0] metadata_data_mem[UVM_FIXTURE_METADATA_OPS];
+    bit [7:0] parameter_type_mem[UVM_FIXTURE_PARAMETER_PACKETS];
+    bit [15:0] parameter_tensor_mem[UVM_FIXTURE_PARAMETER_PACKETS];
+    bit [15:0] parameter_layer_mem[UVM_FIXTURE_PARAMETER_PACKETS];
+    bit [15:0] parameter_payload_start_mem[UVM_FIXTURE_PARAMETER_PACKETS];
+    bit [15:0] parameter_payload_length_mem[UVM_FIXTURE_PARAMETER_PACKETS];
+    byte unsigned parameter_payload_mem[UVM_FIXTURE_PARAMETER_BYTES];
+    bit [7:0] input_type_mem[UVM_FIXTURE_INPUT_PACKETS];
+    bit [15:0] input_tensor_mem[UVM_FIXTURE_INPUT_PACKETS];
+    bit [15:0] input_layer_mem[UVM_FIXTURE_INPUT_PACKETS];
+    bit [15:0] input_tile_x_mem[UVM_FIXTURE_INPUT_PACKETS];
+    bit [15:0] input_tile_y_mem[UVM_FIXTURE_INPUT_PACKETS];
+    bit [15:0] input_tile_width_mem[UVM_FIXTURE_INPUT_PACKETS];
+    bit [15:0] input_tile_height_mem[UVM_FIXTURE_INPUT_PACKETS];
+    bit [15:0] input_channels_mem[UVM_FIXTURE_INPUT_PACKETS];
+    bit [15:0] input_payload_start_mem[UVM_FIXTURE_INPUT_PACKETS];
+    bit [15:0] input_payload_length_mem[UVM_FIXTURE_INPUT_PACKETS];
+    byte unsigned input_payload_mem[UVM_FIXTURE_INPUT_BYTES];
+    bit [7:0] expected_type_mem[UVM_FIXTURE_EXPECTED_PACKETS];
+    bit [15:0] expected_tensor_mem[UVM_FIXTURE_EXPECTED_PACKETS];
+    bit [15:0] expected_layer_mem[UVM_FIXTURE_EXPECTED_PACKETS];
+    bit [15:0] expected_tile_x_mem[UVM_FIXTURE_EXPECTED_PACKETS];
+    bit [15:0] expected_tile_y_mem[UVM_FIXTURE_EXPECTED_PACKETS];
+    bit [15:0] expected_tile_width_mem[UVM_FIXTURE_EXPECTED_PACKETS];
+    bit [15:0] expected_tile_height_mem[UVM_FIXTURE_EXPECTED_PACKETS];
+    bit [15:0] expected_channels_mem[UVM_FIXTURE_EXPECTED_PACKETS];
+    bit [15:0] expected_payload_start_mem[UVM_FIXTURE_EXPECTED_PACKETS];
+    bit [15:0] expected_payload_length_mem[UVM_FIXTURE_EXPECTED_PACKETS];
+    byte unsigned expected_payload_mem[UVM_FIXTURE_EXPECTED_BYTES];
+    byte unsigned final_tensor_mem[UVM_FIXTURE_FINAL_ELEMENTS];
+
+    function new(string name, uvm_component parent); super.new(name, parent); endfunction
+
+    function void load_fixture_files();
+      $readmemh("uvm_fixture/metadata_action.mem", metadata_action_mem);
+      $readmemh("uvm_fixture/metadata_kind.mem", metadata_kind_mem);
+      $readmemh("uvm_fixture/metadata_record.mem", metadata_record_mem);
+      $readmemh("uvm_fixture/metadata_word.mem", metadata_word_mem);
+      $readmemh("uvm_fixture/metadata_data.mem", metadata_data_mem);
+      $readmemh("uvm_fixture/parameter_type.mem", parameter_type_mem);
+      $readmemh("uvm_fixture/parameter_tensor.mem", parameter_tensor_mem);
+      $readmemh("uvm_fixture/parameter_layer.mem", parameter_layer_mem);
+      $readmemh("uvm_fixture/parameter_payload_start.mem",
+                parameter_payload_start_mem);
+      $readmemh("uvm_fixture/parameter_payload_length.mem",
+                parameter_payload_length_mem);
+      $readmemh("uvm_fixture/parameter_payload.mem", parameter_payload_mem);
+      $readmemh("uvm_fixture/input_type.mem", input_type_mem);
+      $readmemh("uvm_fixture/input_tensor.mem", input_tensor_mem);
+      $readmemh("uvm_fixture/input_layer.mem", input_layer_mem);
+      $readmemh("uvm_fixture/input_tile_x.mem", input_tile_x_mem);
+      $readmemh("uvm_fixture/input_tile_y.mem", input_tile_y_mem);
+      $readmemh("uvm_fixture/input_tile_width.mem", input_tile_width_mem);
+      $readmemh("uvm_fixture/input_tile_height.mem", input_tile_height_mem);
+      $readmemh("uvm_fixture/input_channels.mem", input_channels_mem);
+      $readmemh("uvm_fixture/input_payload_start.mem", input_payload_start_mem);
+      $readmemh("uvm_fixture/input_payload_length.mem", input_payload_length_mem);
+      $readmemh("uvm_fixture/input_payload.mem", input_payload_mem);
+      $readmemh("uvm_fixture/expected_type.mem", expected_type_mem);
+      $readmemh("uvm_fixture/expected_tensor.mem", expected_tensor_mem);
+      $readmemh("uvm_fixture/expected_layer.mem", expected_layer_mem);
+      $readmemh("uvm_fixture/expected_tile_x.mem", expected_tile_x_mem);
+      $readmemh("uvm_fixture/expected_tile_y.mem", expected_tile_y_mem);
+      $readmemh("uvm_fixture/expected_tile_width.mem", expected_tile_width_mem);
+      $readmemh("uvm_fixture/expected_tile_height.mem", expected_tile_height_mem);
+      $readmemh("uvm_fixture/expected_channels.mem", expected_channels_mem);
+      $readmemh("uvm_fixture/expected_payload_start.mem",
+                expected_payload_start_mem);
+      $readmemh("uvm_fixture/expected_payload_length.mem",
+                expected_payload_length_mem);
+      $readmemh("uvm_fixture/expected_payload.mem", expected_payload_mem);
+      $readmemh("uvm_fixture/final_tensor.mem", final_tensor_mem);
+    endfunction
+
+    function cnn_axis_packet build_fixture_packet(
+      bit [7:0] packet_type,
+      bit [15:0] tensor_id,
+      bit [15:0] layer_id,
+      bit [15:0] tile_x,
+      bit [15:0] tile_y,
+      bit [15:0] tile_width,
+      bit [15:0] tile_height,
+      bit [15:0] channels,
+      byte unsigned payload[]
+    );
+      cnn_axis_packet packet = cnn_axis_packet::type_id::create("fixture_packet");
+      packet.packet_type = packet_type;
+      packet.job_id = UVM_FIXTURE_JOB_ID;
+      packet.tensor_id = tensor_id;
+      packet.layer_id = layer_id;
+      packet.tile_x = tile_x;
+      packet.tile_y = tile_y;
+      packet.tile_width = tile_width;
+      packet.tile_height = tile_height;
+      packet.channel_offset = 0;
+      packet.channel_count = channels;
+      packet.payload = new[payload.size()](payload);
+      return packet;
+    endfunction
+
+    function cnn_axis_packet parameter_packet(int index);
+      byte unsigned payload[] = new[parameter_payload_length_mem[index]];
+      for (int byte_index = 0; byte_index < payload.size(); byte_index++)
+        payload[byte_index] = parameter_payload_mem[
+          parameter_payload_start_mem[index] + byte_index];
+      return build_fixture_packet(
+        parameter_type_mem[index], parameter_tensor_mem[index],
+        parameter_layer_mem[index], 0, 0, 0, 0, 0, payload);
+    endfunction
+
+    function cnn_axis_packet input_packet(int index);
+      byte unsigned payload[] = new[input_payload_length_mem[index]];
+      for (int byte_index = 0; byte_index < payload.size(); byte_index++)
+        payload[byte_index] = input_payload_mem[
+          input_payload_start_mem[index] + byte_index];
+      return build_fixture_packet(
+        input_type_mem[index], input_tensor_mem[index], input_layer_mem[index],
+        input_tile_x_mem[index], input_tile_y_mem[index],
+        input_tile_width_mem[index], input_tile_height_mem[index],
+        input_channels_mem[index], payload);
+    endfunction
+
+    function cnn_axis_packet expected_packet(int index);
+      byte unsigned payload[] = new[expected_payload_length_mem[index]];
+      for (int byte_index = 0; byte_index < payload.size(); byte_index++)
+        payload[byte_index] = expected_payload_mem[
+          expected_payload_start_mem[index] + byte_index];
+      return build_fixture_packet(
+        expected_type_mem[index], expected_tensor_mem[index],
+        expected_layer_mem[index], expected_tile_x_mem[index],
+        expected_tile_y_mem[index], expected_tile_width_mem[index],
+        expected_tile_height_mem[index], expected_channels_mem[index], payload);
+    endfunction
+
+    task load_compiler_model();
+      axi_write(ADDR_JOB_ID, UVM_FIXTURE_JOB_ID);
+      axi_write(ADDR_PARAMETER_LAYER, 0);
+      axi_write(ADDR_MODEL_COMMAND, 1);
+      for (int op = 0; op < UVM_FIXTURE_METADATA_OPS; op++) begin
+        if (metadata_action_mem[op])
+          commit_metadata(metadata_kind_mem[op], metadata_record_mem[op]);
+        else
+          write_metadata(metadata_kind_mem[op], metadata_record_mem[op],
+                         metadata_word_mem[op], metadata_data_mem[op]);
+      end
+      axi_write(ADDR_MODEL_COMMAND, 2);
+      axi_write(ADDR_MODEL_COMMAND, 4);
+      axi_write(ADDR_MODEL_COMMAND, 8);
+    endtask
+
+    task preload_compiler_parameters();
+      bit [31:0] value;
+      for (int layer = 0; layer < 2; layer++) begin
+        axi_write(ADDR_PARAMETER_LAYER, layer);
+        for (int packet_index = 0;
+             packet_index < UVM_FIXTURE_PARAMETER_PACKETS; packet_index++) begin
+          if (parameter_layer_mem[packet_index] == layer)
+            send_packet(parameter_packet(packet_index));
+        end
+        for (int poll = 0; poll < 100; poll++) begin
+          checked_read(ADDR_PARAMETER_BANKS, value);
+          if ((layer == 0 && value[1:0] != 0) ||
+              (layer == 1 && value[1:0] == 2'b11)) break;
+          if (poll == 99)
+            `uvm_fatal("PARAMETER", $sformatf(
+              "compiler parameter layer %0d did not become valid", layer))
+        end
+      end
+    endtask
+
+    task run_phase(uvm_phase phase);
+      bit [31:0] value;
+      string reason;
+      phase.raise_objection(this);
+      load_fixture_files();
+      load_compiler_model();
+      checked_read(ADDR_ACTIVE_MODEL_ID, value);
+      if (value != UVM_FIXTURE_MODEL_ID)
+        `uvm_fatal("MODEL", "compiler fixture model activation failed")
+      env.ddr_model.configure_tensor(
+        UVM_FIXTURE_INTERMEDIATE_ID, UVM_FIXTURE_INTERMEDIATE_BASE,
+        UVM_FIXTURE_INTERMEDIATE_WIDTH, UVM_FIXTURE_INTERMEDIATE_HEIGHT,
+        UVM_FIXTURE_INTERMEDIATE_CHANNELS,
+        UVM_FIXTURE_INTERMEDIATE_ROW_STRIDE,
+        UVM_FIXTURE_INTERMEDIATE_PIXEL_STRIDE);
+      env.ddr_model.configure_tensor(
+        UVM_FIXTURE_FINAL_ID, UVM_FIXTURE_FINAL_BASE,
+        UVM_FIXTURE_FINAL_WIDTH, UVM_FIXTURE_FINAL_HEIGHT,
+        UVM_FIXTURE_FINAL_CHANNELS, UVM_FIXTURE_FINAL_ROW_STRIDE,
+        UVM_FIXTURE_FINAL_PIXEL_STRIDE);
+      preload_compiler_parameters();
+      for (int packet_index = 0;
+           packet_index < UVM_FIXTURE_EXPECTED_PACKETS; packet_index++)
+        env.scoreboard.enqueue_expected(expected_packet(packet_index));
+      axi_write(ADDR_CONTROL, 1);
+      for (int packet_index = 0;
+           packet_index < UVM_FIXTURE_INPUT_PACKETS; packet_index++)
+        send_packet(input_packet(packet_index));
+      env.ddr_model.wait_for_tensor_packets(
+        UVM_FIXTURE_INTERMEDIATE_ID, UVM_FIXTURE_LAYER_ZERO_OUTPUTS, 400us);
+      for (int packet_index = 0;
+           packet_index < UVM_FIXTURE_EXPECTED_PACKETS; packet_index++) begin
+        cnn_axis_packet gathered;
+        if (expected_layer_mem[packet_index] != 1) continue;
+        gathered = env.ddr_model.gather_activation(
+          UVM_FIXTURE_INTERMEDIATE_ID, UVM_FIXTURE_JOB_ID, 1,
+          expected_tile_x_mem[packet_index], expected_tile_y_mem[packet_index],
+          expected_tile_width_mem[packet_index],
+          expected_tile_height_mem[packet_index], 0,
+          UVM_FIXTURE_INTERMEDIATE_CHANNELS);
+        send_packet(gathered);
+      end
+      env.scoreboard.wait_for_matches(UVM_FIXTURE_EXPECTED_PACKETS, 400us);
+      if (!env.ddr_model.compare_tensor(
+            UVM_FIXTURE_FINAL_ID, final_tensor_mem, reason))
+        `uvm_fatal("PYTHON_REFERENCE", reason)
+      checked_read(ADDR_STATUS, value);
+      if (value[2]) `uvm_fatal("RUNTIME", "compiler-reference job reported error")
+      checked_read(ADDR_COMPLETED_LAYERS, value);
+      if (value != 2) `uvm_fatal("RUNTIME", "compiler-reference layer count mismatch")
       phase.drop_objection(this);
     endtask
   endclass

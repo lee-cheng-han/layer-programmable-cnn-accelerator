@@ -26,6 +26,8 @@ done
 
 rm -rf "$build_dir"
 mkdir -p "$build_dir"
+python3 "$repo_root/scripts/generate_uvm_closed_loop_fixture.py" \
+  --output "$build_dir/uvm_fixture"
 cd "$build_dir"
 cp "$xilinx_root/data/xsim/xsim.ini" ./xsim.ini
 
@@ -85,6 +87,7 @@ done
 
 "$xvlog_bin" --sv --uvm_version 1.2 -L uvm \
   --include "$repo_root/verification/uvm" \
+  --include "$build_dir/uvm_fixture" \
   --include "$xilinx_root/data/xsim/system_verilog/uvm_include" \
   "${rtl_files[@]}" "${sources[@]}"
 "$xelab_bin" --uvm_version 1.2 -L uvm --debug typical \
