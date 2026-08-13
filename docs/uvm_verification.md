@@ -52,6 +52,7 @@ are repeatable.
 | `cnn_uvm_protocol_recovery_test` | Malformed parameter length rejection, packet-error counting, active-model preservation, clear, and successful rerun |
 | `cnn_uvm_closed_loop_ddr_test` | Two-layer execution where observed layer-0 RTL output is scattered into strided DDR tensor memory, gathered as layer-1 input, and checked as a complete final tensor |
 | `cnn_uvm_compiler_reference_test` | A real compiler-produced two-layer 3x3-to-1x1 package drives metadata, parameters, and layer-0 tiles; observed RTL output is reused from DDR for layer 1 and the final tensor is checked against the independent Python package executor |
+| `cnn_uvm_protocol_ral_test` | Address-first and data-first AXI-Lite writes, delayed responses, partial and zero-byte strobes, all 28 register definitions, predictor mirrors, reset values, frontdoor access, and invalid-address responses |
 
 Run source compilation and complete UVM elaboration:
 
@@ -65,6 +66,7 @@ Run an executable test on a working XSim UVM installation:
 make uvm-smoke
 make uvm-closed-loop
 make uvm-compiler-reference
+make uvm-protocol-ral
 UVM_TESTNAME=cnn_uvm_protocol_recovery_test bash scripts/run_uvm_xsim.sh
 ```
 
@@ -84,7 +86,7 @@ Vivado/XSim 2026.1 on the current host compiles every UVM source, elaborates the
 complete programmable DUT, and executes the register-access, protocol-recovery,
 end-to-end smoke, closed-loop DDR, and compiler-reference tests.
 `make uvm-regression` completes with zero UVM errors and zero UVM fatals in all
-five tests.
+six tests.
 
 ## Coverage Model
 
@@ -97,6 +99,9 @@ Implemented coverpoints include:
 - AXI-Lite read versus write
 - control, progress, and version register regions
 - AXI response class
+- AXI write-address versus write-data arrival order
+- AXI response latency
+- AXI write-strobe class
 - packet-type by channel-class crosses
 - register-operation by address-region crosses
 
@@ -107,7 +112,7 @@ Implemented coverpoints include:
 | U0 | Reusable UVM foundation | Complete | Production DUT, agents, monitors, RAL foundation, scoreboard, coverage, virtual sequencer, and tests compile and elaborate |
 | U1 | Executable regression | Complete locally | Register, smoke, recovery, closed-loop DDR, and compiler-reference tests produce zero-error UVM summaries; CI artifact and seed archival remain to be added |
 | U2 | Independent closed-loop checking | Complete for directed mixed-network scope | A real compiler package drives a two-layer 3x3-to-1x1 job; actual layer-0 RTL output is stored in behavioral DDR and reused by layer 1, then complete final memory is compared with the independent Python executor |
-| U3 | Protocol and RAL maturity | Planned | AXI timing variation, protocol validation, complete register model, predictor, mirrors, reset values, access policies, and byte strobes are covered |
+| U3 | Protocol and RAL maturity | Complete for the single-outstanding interface | Deterministic AW/W/response timing variation, defensive packet validation, all 28 registers, byte-granular prediction, mirrors, reset values, access policies, byte strobes, and invalid-address responses are covered |
 | U4 | Constrained-random and fault campaign | Planned | Compiler-generated 1-8-layer sequences cover legal combinations plus reset, abort, corruption, reordering, timeout, replacement, interrupt, residual, and saturation faults |
 | U5 | Coverage closure and signoff | Planned | Functional and assertion coverage are merged in CI, requirements map to tests and coverpoints, exclusions are reviewed, and all closure targets are met |
 
@@ -132,37 +137,32 @@ Implemented coverpoints include:
 
 ### Agent And RAL Maturity
 
-6. Expand the AXI-Lite agent to vary AW/W ordering, valid gaps, response
-   readiness, byte strobes, and supported outstanding-channel behavior.
-7. Make stream monitors independently validate magic, version, header size,
-   packet type, flags, payload length, low-lane `TKEEP`, and final `TLAST` before
-   publishing transactions.
-8. Complete the register model for every software-visible register and add a
-   predictor, mirror checks, reset-value tests, access-policy tests, and
-   register/field coverage.
-9. Move all multi-agent coordination into reusable virtual sequences and add
+6. Preserve the implemented single-outstanding AXI-Lite contract; add
+   multi-outstanding behavior only if the RTL interface is intentionally
+   extended to support it.
+7. Move all multi-agent coordination into reusable virtual sequences and add
     dedicated reset and interrupt agents.
-10. Split transactions, agents, RAL, environment, sequences, coverage, and tests
+8. Split transactions, agents, RAL, environment, sequences, coverage, and tests
     into focused packages/files as the environment grows.
 
 ### Randomization, Assertions, And Faults
 
-11. Add compiler-generated constrained-random 1-8-layer networks spanning both
+9. Add compiler-generated constrained-random 1-8-layer networks spanning both
     kernels, both strides, asymmetric padding, channel tails, activations,
     residual modes, quantization, clipping, and parameter-bank reuse.
-12. Add reset-at-state, CRC corruption, stale tensor ID, packet reordering,
+10. Add reset-at-state, CRC corruption, stale tensor ID, packet reordering,
     truncation, abort, DMA timeout, model replacement, bank exhaustion, and
     recovery-without-reset sequence libraries.
-13. Bind AXI, packet, lifecycle, bank-ownership, and internal progress SVA into
+11. Bind AXI, packet, lifecycle, bank-ownership, and internal progress SVA into
     the UVM top and collect assertion pass/fail and coverage separately.
 
 ### Coverage Closure
 
-14. Define coverage targets, legal-bin exclusions, and crosses for kernel,
+12. Define coverage targets, legal-bin exclusions, and crosses for kernel,
     stride, channels, activation, residual, padding, packet type, and fault.
-15. Merge coverage databases across deterministic seeds in licensed CI and
+13. Merge coverage databases across deterministic seeds in licensed CI and
     publish trend and closure reports.
-16. Maintain requirement-to-test-to-assertion-to-coverpoint traceability and add
+14. Maintain requirement-to-test-to-assertion-to-coverpoint traceability and add
     targeted sequences for every uncovered legal bin.
-17. Archive at least one real design or verification bug discovered by the UVM
+15. Archive at least one real design or verification bug discovered by the UVM
     campaign, including seed, symptom, root cause, fix, and regression test.

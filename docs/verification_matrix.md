@@ -11,7 +11,7 @@
 | golden generation | `make baremetal-headers` | Passing | writes deterministic tensors and C DMA packet header |
 | software runtime corpus | `make runtime-corpus-test` | Passing | 24 seeded packages, 1-8 layers, 108 total layers, and 2,792 tiles cross-check compiler packages against the C ABI, tile, packet, and workspace runtime |
 | package-to-RTL numeric flow | `make randomized-package-rtl-test` | Passing | seeded compiler package drives four mixed layers, 26 halo tiles, two-bank parameter recycling, randomized output backpressure, and 268 exact golden packet beats |
-| UVM environment | `make uvm-regression` | Passing on XSim 2026.1 | Five UVM 1.2 tests cover register access, recovery, smoke execution, DDR chaining, and a compiler-produced mixed 3x3-to-1x1 package checked against the independent Python executor; all finish with zero UVM errors or fatals |
+| UVM environment | `make uvm-regression` | Passing on XSim 2026.1 | Six UVM 1.2 tests cover register access, AXI timing/strobes and complete RAL prediction, recovery, smoke execution, DDR chaining, and a compiler-produced mixed 3x3-to-1x1 package checked against Python; all finish with zero UVM errors or fatals |
 | compute RTL | `tb_parallel_mac_array` | Covered | PC x PK signed INT8 MAC datapath |
 | post-processing RTL | `tb_parallel_requantizer` | Covered | per-channel multiply/shift, round-half-to-even ties, lane masks, and signed saturation |
 | residual output RTL | `tb_tile_output_serializer_numeric` | Covered | post-quantization INT8 add/subtract, positive/negative saturation, and clipping-event accounting |
@@ -50,7 +50,7 @@
 | stream-loaded activations/weights/biases | High | stream-loaded full-network golden flow |
 | seven-packet AXI tensor job | High | AXI stream full-network golden flow |
 | output backpressure | High | stream-loaded and AXI stream golden flows |
-| AXI-Lite control/status/performance registers | High pre-board | programmable lifecycle, metadata, launch, progress, parameter-bank, DDR-context, IRQ, and error registers pass integrated RTL tests |
+| AXI-Lite control/status/performance registers | High pre-board | all 28 registers are modeled; address/data ordering, response stalls, byte strobes, predictor mirrors, resets, lifecycle, metadata, progress, parameter-bank, DDR-context, IRQ, error, and invalid-address behavior pass integrated tests |
 | runtime metadata lifecycle | High pre-board | standalone lifecycle test plus complete AXI-Lite metadata load and activation |
 | descriptor-driven execution | High pre-integration | active-bank four-layer golden flow, eight-layer boundary flow, and negative tests under Verilator CI |
 | reusable runtime parameters | High pre-integration | bank-level negative tests plus integrated eight-layer scratchpad-backed execution |

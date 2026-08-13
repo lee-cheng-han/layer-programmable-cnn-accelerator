@@ -328,6 +328,7 @@ make uvm-compile       # compile/elaborate production UVM environment with XSim
 make uvm-smoke         # execute UVM lifecycle-to-output smoke test
 make uvm-closed-loop   # reuse observed RTL output through behavioral DDR
 make uvm-compiler-reference # run a compiler package against Python and chained RTL
+make uvm-protocol-ral  # verify AXI timing, strobes, and complete RAL prediction
 make uvm-regression    # execute all production UVM tests
 make golden-test      # generated tensor fixtures against integrated RTL
 make unit             # directed and randomized RTL testbenches

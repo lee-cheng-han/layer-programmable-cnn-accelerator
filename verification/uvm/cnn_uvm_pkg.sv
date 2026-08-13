@@ -12,19 +12,34 @@ package cnn_uvm_pkg;
     rand bit [11:0] address;
     rand bit [31:0] data;
     rand bit [3:0] strobe;
+    rand int unsigned address_delay;
+    rand int unsigned data_delay;
+    rand int unsigned response_ready_delay;
     bit [1:0] response;
+
+    constraint bounded_delays_c {
+      address_delay inside {[0:15]};
+      data_delay inside {[0:15]};
+      response_ready_delay inside {[0:15]};
+    }
 
     `uvm_object_utils_begin(cnn_axi_lite_item)
       `uvm_field_enum(cnn_axi_kind_e, kind, UVM_DEFAULT)
       `uvm_field_int(address, UVM_HEX)
       `uvm_field_int(data, UVM_HEX)
       `uvm_field_int(strobe, UVM_HEX)
+      `uvm_field_int(address_delay, UVM_DEC)
+      `uvm_field_int(data_delay, UVM_DEC)
+      `uvm_field_int(response_ready_delay, UVM_DEC)
       `uvm_field_int(response, UVM_HEX)
     `uvm_object_utils_end
 
     function new(string name = "cnn_axi_lite_item");
       super.new(name);
       strobe = 4'hF;
+      address_delay = 0;
+      data_delay = 0;
+      response_ready_delay = 0;
     endfunction
   endclass
 
@@ -40,6 +55,10 @@ package cnn_uvm_pkg;
     rand bit [15:0] channel_offset;
     rand bit [15:0] channel_count;
     rand byte unsigned payload[];
+    bit [31:0] protocol_magic = DMA_MAGIC;
+    bit [7:0] protocol_version = 1;
+    bit [7:0] protocol_header_words = DMA_HEADER_WORDS;
+    bit [7:0] protocol_flags = 0;
     int declared_payload_length = -1;
 
     constraint payload_size_c { payload.size() inside {[1:4096]}; }
@@ -55,6 +74,10 @@ package cnn_uvm_pkg;
       `uvm_field_int(tile_height, UVM_DEC)
       `uvm_field_int(channel_offset, UVM_DEC)
       `uvm_field_int(channel_count, UVM_DEC)
+      `uvm_field_int(protocol_magic, UVM_HEX)
+      `uvm_field_int(protocol_version, UVM_DEC)
+      `uvm_field_int(protocol_header_words, UVM_DEC)
+      `uvm_field_int(protocol_flags, UVM_HEX)
       `uvm_field_array_int(payload, UVM_HEX)
       `uvm_field_int(declared_payload_length, UVM_DEC)
     `uvm_object_utils_end
@@ -129,28 +152,41 @@ package cnn_uvm_pkg;
     endtask
 
     task drive_write(cnn_axi_lite_item request, cnn_axi_lite_item response);
-      @(negedge vif.aclk);
-      vif.awaddr <= request.address;
-      vif.awvalid <= 1'b1;
-      vif.wdata <= request.data;
-      vif.wstrb <= request.strobe;
-      vif.wvalid <= 1'b1;
       vif.bready <= 1'b0;
       fork
-        begin do @(posedge vif.aclk); while (!vif.awready); end
-        begin do @(posedge vif.aclk); while (!vif.wready); end
+        begin
+          repeat (request.address_delay) @(posedge vif.aclk);
+          @(negedge vif.aclk);
+          vif.awaddr <= request.address;
+          vif.awvalid <= 1'b1;
+          do @(posedge vif.aclk); while (!vif.awready);
+          @(negedge vif.aclk);
+          vif.awvalid <= 1'b0;
+        end
+        begin
+          repeat (request.data_delay) @(posedge vif.aclk);
+          @(negedge vif.aclk);
+          vif.wdata <= request.data;
+          vif.wstrb <= request.strobe;
+          vif.wvalid <= 1'b1;
+          do @(posedge vif.aclk); while (!vif.wready);
+          @(negedge vif.aclk);
+          vif.wvalid <= 1'b0;
+        end
       join
+      repeat (request.response_ready_delay) @(posedge vif.aclk);
       @(negedge vif.aclk);
-      vif.awvalid <= 1'b0;
-      vif.wvalid <= 1'b0;
       vif.bready <= 1'b1;
       do @(posedge vif.aclk); while (!vif.bvalid);
+      response.data = request.data;
+      response.strobe = request.strobe;
       response.response = vif.bresp;
       @(negedge vif.aclk);
       vif.bready <= 1'b0;
     endtask
 
     task drive_read(cnn_axi_lite_item request, cnn_axi_lite_item response);
+      repeat (request.address_delay) @(posedge vif.aclk);
       @(negedge vif.aclk);
       vif.araddr <= request.address;
       vif.arvalid <= 1'b1;
@@ -158,6 +194,8 @@ package cnn_uvm_pkg;
       do @(posedge vif.aclk); while (!vif.arready);
       @(negedge vif.aclk);
       vif.arvalid <= 1'b0;
+      repeat (request.response_ready_delay) @(posedge vif.aclk);
+      @(negedge vif.aclk);
       vif.rready <= 1'b1;
       do @(posedge vif.aclk); while (!vif.rvalid);
       response.data = vif.rdata;
@@ -174,8 +212,14 @@ package cnn_uvm_pkg;
     bit [11:0] write_address;
     bit [31:0] write_data;
     bit [3:0] write_strobe;
+    bit [11:0] read_address;
     bit have_address;
     bit have_data;
+    bit have_read_address;
+    longint unsigned cycle_count;
+    longint unsigned address_cycle;
+    longint unsigned data_cycle;
+    longint unsigned read_address_cycle;
 
     function new(string name, uvm_component parent);
       super.new(name, parent);
@@ -192,18 +236,27 @@ package cnn_uvm_pkg;
       cnn_axi_lite_item item;
       forever begin
         @(posedge vif.aclk);
+        cycle_count++;
         if (!vif.aresetn) begin
           have_address = 0;
           have_data = 0;
+          have_read_address = 0;
         end else begin
           if (vif.awvalid && vif.awready) begin
             write_address = vif.awaddr;
+            address_cycle = cycle_count;
             have_address = 1;
           end
           if (vif.wvalid && vif.wready) begin
             write_data = vif.wdata;
             write_strobe = vif.wstrb;
+            data_cycle = cycle_count;
             have_data = 1;
+          end
+          if (vif.arvalid && vif.arready) begin
+            read_address = vif.araddr;
+            read_address_cycle = cycle_count;
+            have_read_address = 1;
           end
           if (vif.bvalid && vif.bready && have_address && have_data) begin
             item = cnn_axi_lite_item::type_id::create("observed_write");
@@ -211,18 +264,30 @@ package cnn_uvm_pkg;
             item.address = write_address;
             item.data = write_data;
             item.strobe = write_strobe;
+            if (address_cycle <= data_cycle) begin
+              item.address_delay = 0;
+              item.data_delay = data_cycle - address_cycle;
+            end else begin
+              item.address_delay = address_cycle - data_cycle;
+              item.data_delay = 0;
+            end
+            item.response_ready_delay = cycle_count -
+                                        ((address_cycle > data_cycle) ?
+                                         address_cycle : data_cycle);
             item.response = vif.bresp;
             analysis_port.write(item);
             have_address = 0;
             have_data = 0;
           end
-          if (vif.rvalid && vif.rready) begin
+          if (vif.rvalid && vif.rready && have_read_address) begin
             item = cnn_axi_lite_item::type_id::create("observed_read");
             item.kind = AXI_READ;
-            item.address = vif.araddr;
+            item.address = read_address;
             item.data = vif.rdata;
+            item.response_ready_delay = cycle_count - read_address_cycle;
             item.response = vif.rresp;
             analysis_port.write(item);
+            have_read_address = 0;
           end
         end
       end
@@ -292,9 +357,9 @@ package cnn_uvm_pkg;
       bit [31:0] headers[8];
       bit [31:0] data;
       int remaining;
-      headers[0] = DMA_MAGIC;
-      headers[1] = 32'(1 | (DMA_HEADER_WORDS << 8) |
-                       (packet.packet_type << 16));
+      headers[0] = packet.protocol_magic;
+      headers[1] = {packet.protocol_flags, packet.packet_type,
+                    packet.protocol_header_words, packet.protocol_version};
       headers[2] = packet.job_id;
       headers[3] = {packet.layer_id, packet.tensor_id};
       headers[4] = {packet.tile_y, packet.tile_x};
@@ -331,10 +396,14 @@ package cnn_uvm_pkg;
     uvm_analysis_port #(cnn_axis_packet) analysis_port;
     bit [31:0] words[$];
     bit [3:0] keeps[$];
+    int unsigned expected_protocol_errors;
+    int unsigned observed_protocol_errors;
 
     function new(string name, uvm_component parent);
       super.new(name, parent);
       analysis_port = new("analysis_port", this);
+      expected_protocol_errors = 0;
+      observed_protocol_errors = 0;
     endfunction
 
     function void build_phase(uvm_phase phase);
@@ -343,15 +412,86 @@ package cnn_uvm_pkg;
         `uvm_fatal("NOVIF", "AXIS monitor has no virtual interface")
     endfunction
 
+    function bit validate_packet(output string reason);
+      int payload_bytes;
+      int payload_beats;
+      bit [3:0] expected_keep;
+      if (words.size() < DMA_HEADER_WORDS) begin
+        reason = "TLAST arrived before the complete header";
+        return 0;
+      end
+      for (int index = 0; index < DMA_HEADER_WORDS; index++) begin
+        if (keeps[index] != 4'hF) begin
+          reason = $sformatf("header beat %0d has TKEEP=%x", index,
+                             keeps[index]);
+          return 0;
+        end
+      end
+      if (words[0] != DMA_MAGIC) begin
+        reason = $sformatf("bad magic %08x", words[0]);
+        return 0;
+      end
+      if (words[1][7:0] != 1) begin
+        reason = $sformatf("unsupported version %0d", words[1][7:0]);
+        return 0;
+      end
+      if (words[1][15:8] != DMA_HEADER_WORDS) begin
+        reason = $sformatf("header words %0d expected %0d",
+                           words[1][15:8], DMA_HEADER_WORDS);
+        return 0;
+      end
+      if (!(words[1][23:16] inside {[1:4]})) begin
+        reason = $sformatf("invalid packet type %0d", words[1][23:16]);
+        return 0;
+      end
+      if (words[1][31:24] != 0) begin
+        reason = $sformatf("unsupported flags %02x", words[1][31:24]);
+        return 0;
+      end
+      payload_bytes = words[7];
+      payload_beats = (payload_bytes + 3) / 4;
+      if (words.size() != DMA_HEADER_WORDS + payload_beats) begin
+        reason = $sformatf("captured %0d beats for %0d-byte payload",
+                           words.size(), payload_bytes);
+        return 0;
+      end
+      for (int index = 0; index < payload_beats; index++) begin
+        expected_keep = ((index == payload_beats - 1) &&
+                         ((payload_bytes % 4) != 0)) ?
+                        ((4'b0001 << (payload_bytes % 4)) - 1'b1) : 4'hF;
+        if (keeps[DMA_HEADER_WORDS + index] != expected_keep) begin
+          reason = $sformatf("payload beat %0d has TKEEP=%x expected=%x",
+                             index, keeps[DMA_HEADER_WORDS + index],
+                             expected_keep);
+          return 0;
+        end
+      end
+      reason = "";
+      return 1;
+    endfunction
+
+    function void report_protocol_error(string reason);
+      observed_protocol_errors++;
+      if (observed_protocol_errors <= expected_protocol_errors)
+        `uvm_info("AXIS_PROTOCOL_EXPECTED", reason, UVM_LOW)
+      else
+        `uvm_error("AXIS_PROTOCOL", reason)
+    endfunction
+
     function void publish_packet();
       cnn_axis_packet item;
       int payload_bytes;
-      if (words.size() < DMA_HEADER_WORDS) begin
-        `uvm_error("AXIS_MON", "packet ended before complete header")
+      string reason;
+      if (!validate_packet(reason)) begin
+        report_protocol_error(reason);
         return;
       end
       item = cnn_axis_packet::type_id::create("observed_packet");
+      item.protocol_magic = words[0];
+      item.protocol_version = words[1][7:0];
+      item.protocol_header_words = words[1][15:8];
       item.packet_type = words[1][23:16];
+      item.protocol_flags = words[1][31:24];
       item.job_id = words[2];
       item.tensor_id = words[3][15:0];
       item.layer_id = words[3][31:16];
@@ -366,6 +506,16 @@ package cnn_uvm_pkg;
       for (int index = 0; index < payload_bytes; index++)
         item.payload[index] = words[DMA_HEADER_WORDS + index/4][(index%4)*8 +: 8];
       analysis_port.write(item);
+    endfunction
+
+    function void check_phase(uvm_phase phase);
+      super.check_phase(phase);
+      if (observed_protocol_errors != expected_protocol_errors)
+        `uvm_error("AXIS_PROTOCOL_COUNT", $sformatf(
+          "observed %0d protocol errors expected %0d",
+          observed_protocol_errors, expected_protocol_errors))
+      if (words.size() != 0)
+        `uvm_error("AXIS_PROTOCOL", "simulation ended with an incomplete packet")
     endfunction
 
     task run_phase(uvm_phase phase);
@@ -726,6 +876,22 @@ package cnn_uvm_pkg;
         bins version = {12'h0fc};
       }
       response_cp: coverpoint sampled.response { bins okay = {0}; bins error = {2}; }
+      strobe_cp: coverpoint sampled.strobe iff (sampled.kind == AXI_WRITE) {
+        bins none = {0}; bins single_lane[] = {1, 2, 4, 8};
+        bins partial = {3, 5, 6, 7, 9, 10, 11, 12, 13, 14};
+        bins full = {15};
+      }
+      write_order_cp: coverpoint {sampled.address_delay != 0,
+                                  sampled.data_delay != 0}
+                      iff (sampled.kind == AXI_WRITE) {
+        bins together = {2'b00};
+        bins data_first = {2'b10};
+        bins address_first = {2'b01};
+      }
+      response_latency_cp: coverpoint sampled.response_ready_delay {
+        bins immediate = {[0:1]}; bins stalled = {[2:31]};
+        bins long_stall = {[32:$]};
+      }
       kind_x_address: cross kind_cp, address_cp;
     endgroup
     function new(string name, uvm_component parent);
@@ -740,44 +906,88 @@ package cnn_uvm_pkg;
 
   class cnn_reg32 extends uvm_reg;
     `uvm_object_utils(cnn_reg32)
-    uvm_reg_field value;
+    uvm_reg_field byte_fields[4];
     string access_mode;
-    function new(string name = "cnn_reg32", string access = "RW");
+    uvm_reg_data_t reset_value;
+    bit is_volatile;
+    function new(string name = "cnn_reg32", string access = "RW",
+                 uvm_reg_data_t reset = 0, bit volatile_field = 0);
       super.new(name, 32, UVM_NO_COVERAGE);
       access_mode = access;
+      reset_value = reset;
+      is_volatile = volatile_field;
     endfunction
     virtual function void build();
-      value = uvm_reg_field::type_id::create("value");
-      value.configure(this, 32, 0, access_mode, 0, 0, 1, 0, 0);
+      for (int lane = 0; lane < 4; lane++) begin
+        byte_fields[lane] = uvm_reg_field::type_id::create(
+          $sformatf("byte_%0d", lane));
+        byte_fields[lane].configure(
+          this, 8, lane * 8, access_mode, is_volatile,
+          (reset_value >> (lane * 8)) & 8'hFF, 1, 0, 0);
+      end
     endfunction
   endclass
 
   class cnn_reg_block extends uvm_reg_block;
     `uvm_object_utils(cnn_reg_block)
     cnn_reg32 control, status, irq_status, irq_enable, job_id;
-    cnn_reg32 parameter_layer, model_command, model_status, version_reg;
+    cnn_reg32 parameter_layer, model_command, model_status;
+    cnn_reg32 active_model_id, active_generation, active_layer_count;
+    cnn_reg32 metadata_address, metadata_data, metadata_commit;
+    cnn_reg32 model_error, runtime_error, active_tensors, current_tile;
+    cnn_reg32 completed_layers, completed_tiles, packet_errors;
+    cnn_reg32 parameter_banks, input_ddr_lo, input_ddr_hi;
+    cnn_reg32 output_ddr_lo, output_ddr_hi, saturation_events, version_reg;
     function new(string name = "cnn_reg_block");
       super.new(name, UVM_NO_COVERAGE);
     endfunction
     virtual function void build();
       default_map = create_map("default_map", 0, 4, UVM_LITTLE_ENDIAN);
-      control = make_reg("control", "RW", 'h000);
-      status = make_reg("status", "RO", 'h004);
-      irq_status = make_reg("irq_status", "RW", 'h008);
+      control = make_reg("control", "WO", 'h000);
+      status = make_reg("status", "RO", 'h004, 0, 1);
+      irq_status = make_reg("irq_status", "W1C", 'h008, 0, 1);
       irq_enable = make_reg("irq_enable", "RW", 'h00c);
       job_id = make_reg("job_id", "RW", 'h010);
       parameter_layer = make_reg("parameter_layer", "RW", 'h014);
       model_command = make_reg("model_command", "WO", 'h018);
-      model_status = make_reg("model_status", "RO", 'h01c);
-      version_reg = make_reg("version", "RO", 'h0fc);
+      model_status = make_reg("model_status", "RO", 'h01c, 0, 1);
+      active_model_id = make_reg("active_model_id", "RO", 'h020, 0, 1);
+      active_generation = make_reg("active_generation", "RO", 'h024, 0, 1);
+      active_layer_count = make_reg("active_layer_count", "RO", 'h028, 0, 1);
+      metadata_address = make_reg("metadata_address", "RW", 'h02c);
+      metadata_data = make_reg("metadata_data", "RW", 'h030, 0, 1);
+      metadata_commit = make_reg("metadata_commit", "WO", 'h034);
+      model_error = make_reg("model_error", "W1C", 'h038, 0, 1);
+      runtime_error = make_reg("runtime_error", "RO", 'h03c, 0, 1);
+      active_tensors = make_reg("active_tensors", "RO", 'h040, 0, 1);
+      current_tile = make_reg("current_tile", "RO", 'h044, 0, 1);
+      completed_layers = make_reg("completed_layers", "RO", 'h048, 0, 1);
+      completed_tiles = make_reg("completed_tiles", "RO", 'h04c, 0, 1);
+      packet_errors = make_reg("packet_errors", "RO", 'h050, 0, 1);
+      parameter_banks = make_reg("parameter_banks", "RO", 'h054, 0, 1);
+      input_ddr_lo = make_reg("input_ddr_lo", "RO", 'h058, 0, 1);
+      input_ddr_hi = make_reg("input_ddr_hi", "RO", 'h05c, 0, 1);
+      output_ddr_lo = make_reg("output_ddr_lo", "RO", 'h060, 0, 1);
+      output_ddr_hi = make_reg("output_ddr_hi", "RO", 'h064, 0, 1);
+      saturation_events = make_reg("saturation_events", "RO", 'h068, 0, 1);
+      version_reg = make_reg("version", "RO", 'h0fc, 32'h0005_0001);
       lock_model();
+      reset();
     endfunction
-    function cnn_reg32 make_reg(string name, string access, uvm_reg_addr_t offset);
+    function cnn_reg32 make_reg(string name, string access,
+                                uvm_reg_addr_t offset,
+                                uvm_reg_data_t reset = 0,
+                                bit volatile_field = 0);
       cnn_reg32 reg_instance;
-      reg_instance = new(name, access);
+      reg_instance = new(name, access, reset, volatile_field);
       reg_instance.configure(this, null, "");
       reg_instance.build();
-      default_map.add_reg(reg_instance, offset, access);
+      if (access == "RO")
+        default_map.add_reg(reg_instance, offset, "RO");
+      else if (access == "WO")
+        default_map.add_reg(reg_instance, offset, "WO");
+      else
+        default_map.add_reg(reg_instance, offset, "RW");
       return reg_instance;
     endfunction
   endclass
@@ -806,6 +1016,7 @@ package cnn_uvm_pkg;
       rw.kind = item.kind == AXI_READ ? UVM_READ : UVM_WRITE;
       rw.addr = item.address;
       rw.data = item.data;
+      rw.byte_en = item.strobe;
       rw.status = item.response == 0 ? UVM_IS_OK : UVM_NOT_OK;
     endfunction
   endclass
@@ -830,6 +1041,7 @@ package cnn_uvm_pkg;
     cnn_virtual_sequencer virtual_sequencer;
     cnn_reg_block registers;
     cnn_reg_adapter reg_adapter;
+    uvm_reg_predictor #(cnn_axi_lite_item) reg_predictor;
 
     function new(string name, uvm_component parent); super.new(name, parent); endfunction
     function void build_phase(uvm_phase phase);
@@ -846,11 +1058,16 @@ package cnn_uvm_pkg;
       registers = cnn_reg_block::type_id::create("registers");
       registers.build();
       reg_adapter = cnn_reg_adapter::type_id::create("reg_adapter");
+      reg_predictor = new("reg_predictor", this);
     endfunction
     function void connect_phase(uvm_phase phase);
       virtual_sequencer.axi_sequencer = axi_agent.sequencer;
       virtual_sequencer.axis_sequencer = input_agent.sequencer;
       registers.default_map.set_sequencer(axi_agent.sequencer, reg_adapter);
+      registers.default_map.set_auto_predict(0);
+      reg_predictor.map = registers.default_map;
+      reg_predictor.adapter = reg_adapter;
+      axi_agent.monitor.analysis_port.connect(reg_predictor.bus_in);
       axi_agent.monitor.analysis_port.connect(axi_coverage.analysis_export);
       input_agent.monitor.analysis_port.connect(input_coverage.analysis_export);
       output_agent.monitor.analysis_port.connect(output_coverage.analysis_export);

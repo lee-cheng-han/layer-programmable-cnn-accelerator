@@ -10,6 +10,9 @@ package cnn_uvm_tests_pkg;
     bit [11:0] address;
     bit [31:0] data;
     bit [3:0] strobe = 4'hF;
+    int unsigned address_delay;
+    int unsigned data_delay;
+    int unsigned response_ready_delay;
     cnn_axi_lite_item response;
     function new(string name = "cnn_axi_single_sequence"); super.new(name); endfunction
     task body();
@@ -19,6 +22,9 @@ package cnn_uvm_tests_pkg;
       request.address = address;
       request.data = data;
       request.strobe = strobe;
+      request.address_delay = address_delay;
+      request.data_delay = data_delay;
+      request.response_ready_delay = response_ready_delay;
       finish_item(request);
       get_response(response);
     endtask
@@ -61,13 +67,19 @@ package cnn_uvm_tests_pkg;
     endfunction
 
     task axi_write(bit [11:0] address, bit [31:0] data,
-                   bit [3:0] strobe = 4'hF);
+                   bit [3:0] strobe = 4'hF,
+                   int unsigned address_delay = 0,
+                   int unsigned data_delay = 0,
+                   int unsigned response_ready_delay = 0);
       cnn_axi_single_sequence seq =
         cnn_axi_single_sequence::type_id::create("axi_write_sequence");
       seq.kind = AXI_WRITE;
       seq.address = address;
       seq.data = data;
       seq.strobe = strobe;
+      seq.address_delay = address_delay;
+      seq.data_delay = data_delay;
+      seq.response_ready_delay = response_ready_delay;
       seq.start(env.axi_agent.sequencer);
       if (seq.response.response != 0)
         `uvm_fatal("AXI_WRITE", $sformatf("write %03x response %0d",
@@ -75,11 +87,15 @@ package cnn_uvm_tests_pkg;
     endtask
 
     task axi_read(bit [11:0] address, output bit [31:0] data,
-                  output bit [1:0] response);
+                  output bit [1:0] response,
+                  input int unsigned address_delay = 0,
+                  input int unsigned response_ready_delay = 0);
       cnn_axi_single_sequence seq =
         cnn_axi_single_sequence::type_id::create("axi_read_sequence");
       seq.kind = AXI_READ;
       seq.address = address;
+      seq.address_delay = address_delay;
+      seq.response_ready_delay = response_ready_delay;
       seq.start(env.axi_agent.sequencer);
       data = seq.response.data;
       response = seq.response.response;
@@ -326,6 +342,7 @@ package cnn_uvm_tests_pkg;
       load_smoke_model();
       packet = make_packet(2, 0, 0, 0, 0, malformed);
       packet.declared_payload_length = 1;
+      env.input_agent.monitor.expected_protocol_errors++;
       send_packet(packet);
       repeat (8) #10ns;
       checked_read(ADDR_STATUS, value);
@@ -628,6 +645,65 @@ package cnn_uvm_tests_pkg;
       if (value != 32'hA5A5_1234) `uvm_fatal("REGISTER", "JOB_ID mirror mismatch")
       axi_read(12'hFFC, value, response);
       if (response != 2) `uvm_fatal("REGISTER", "invalid read did not return SLVERR")
+      phase.drop_objection(this);
+    endtask
+  endclass
+
+  class cnn_uvm_protocol_ral_test extends cnn_uvm_base_test;
+    `uvm_component_utils(cnn_uvm_protocol_ral_test)
+    function new(string name, uvm_component parent); super.new(name, parent); endfunction
+
+    task run_phase(uvm_phase phase);
+      uvm_reg registers[$];
+      uvm_status_e status;
+      uvm_reg_data_t ral_value;
+      bit [31:0] value;
+      bit [1:0] response;
+      phase.raise_objection(this);
+
+      env.registers.get_registers(registers);
+      if (registers.size() != 28)
+        `uvm_fatal("RAL", $sformatf(
+          "register map contains %0d registers expected 28", registers.size()))
+      env.registers.reset();
+      if (env.registers.version_reg.get_mirrored_value() != 32'h0005_0001)
+        `uvm_fatal("RAL", "version reset value is incorrect")
+
+      // Address-first write with a delayed write-data and response channel.
+      axi_write(ADDR_JOB_ID, 32'h1122_3344, 4'hF, 0, 5, 4);
+      if (env.registers.job_id.get_mirrored_value() != 32'h1122_3344)
+        `uvm_fatal("RAL", "predictor missed address-first JOB_ID write")
+
+      // Data-first partial write updates only byte lanes zero and two.
+      axi_write(ADDR_JOB_ID, 32'hAABB_CCDD, 4'b0101, 6, 0, 3);
+      if (env.registers.job_id.get_mirrored_value() != 32'h11BB_33DD)
+        `uvm_fatal("RAL", $sformatf(
+          "partial-write mirror=%08x expected=11bb33dd",
+          env.registers.job_id.get_mirrored_value()))
+      axi_read(ADDR_JOB_ID, value, response, 3, 5);
+      if ((response != 0) || (value != 32'h11BB_33DD))
+        `uvm_fatal("AXI_TIMING", "delayed JOB_ID readback mismatch")
+
+      // A zero strobe is accepted but must not modify storage or its mirror.
+      axi_write(ADDR_JOB_ID, 32'hFFFF_FFFF, 4'h0, 2, 0, 2);
+      checked_read(ADDR_JOB_ID, value);
+      if ((value != 32'h11BB_33DD) ||
+          (env.registers.job_id.get_mirrored_value() != 32'h11BB_33DD))
+        `uvm_fatal("BYTE_ENABLE", "zero-strobe write modified JOB_ID")
+
+      env.registers.irq_enable.write(status, 32'h0000_0003);
+      if (status != UVM_IS_OK) `uvm_fatal("RAL", "IRQ_ENABLE write failed")
+      env.registers.irq_enable.read(status, ral_value);
+      if ((status != UVM_IS_OK) || (ral_value != 3))
+        `uvm_fatal("RAL", "IRQ_ENABLE frontdoor readback failed")
+      env.registers.job_id.mirror(status, UVM_CHECK);
+      if (status != UVM_IS_OK) `uvm_fatal("RAL", "JOB_ID mirror check failed")
+      env.registers.version_reg.mirror(status, UVM_CHECK);
+      if (status != UVM_IS_OK) `uvm_fatal("RAL", "VERSION mirror check failed")
+
+      axi_read(12'hFFC, value, response, 4, 4);
+      if ((response != 2) || (value != 32'hDEAD_BEEF))
+        `uvm_fatal("AXI_ERROR", "invalid delayed read did not return SLVERR")
       phase.drop_objection(this);
     endtask
   endclass
