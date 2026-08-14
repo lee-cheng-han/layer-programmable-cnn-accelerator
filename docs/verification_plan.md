@@ -71,6 +71,8 @@ make uvm-compile
 make uvm-smoke
 make uvm-closed-loop
 make uvm-compiler-reference
+make uvm-randomized
+make uvm-faults
 make uvm-protocol-ral
 make uvm-regression
 ```

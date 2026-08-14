@@ -6,6 +6,19 @@ package cnn_uvm_pkg;
   localparam int DMA_HEADER_WORDS = 8;
 
   typedef enum bit {AXI_READ, AXI_WRITE} cnn_axi_kind_e;
+  typedef enum int unsigned {
+    FAULT_PROTOCOL,
+    FAULT_PARAMETER_CRC,
+    FAULT_RESET,
+    FAULT_STARVATION_ABORT,
+    FAULT_STALE_TENSOR,
+    FAULT_PACKET_ORDER,
+    FAULT_MODEL_REPLACEMENT,
+    FAULT_DONE_INTERRUPT,
+    FAULT_RESIDUAL_ADD,
+    FAULT_RESIDUAL_SUBTRACT,
+    FAULT_SATURATION
+  } cnn_fault_kind_e;
 
   class cnn_axi_lite_item extends uvm_sequence_item;
     rand cnn_axi_kind_e kind;
@@ -796,6 +809,68 @@ package cnn_uvm_pkg;
       return packet;
     endfunction
 
+    function cnn_axis_packet gather_activation_region(
+      int unsigned tensor_id,
+      bit [31:0] job_id,
+      int unsigned layer_id,
+      int unsigned tile_x,
+      int unsigned tile_y,
+      int unsigned tile_width,
+      int unsigned tile_height,
+      int unsigned source_x,
+      int unsigned source_y,
+      int unsigned source_width,
+      int unsigned source_height,
+      int unsigned channel_offset,
+      int unsigned channel_count
+    );
+      cnn_axis_packet packet;
+      cnn_tensor_layout layout;
+      int unsigned payload_index;
+      longint unsigned address;
+      packet = cnn_axis_packet::type_id::create("ddr_gathered_region");
+      if (!layouts.exists(tensor_id)) begin
+        `uvm_fatal("DDR_MODEL", $sformatf("tensor %0d is not configured", tensor_id))
+        return packet;
+      end
+      layout = layouts[tensor_id];
+      if ((source_x + source_width > layout.width) ||
+          (source_y + source_height > layout.height) ||
+          (channel_offset + channel_count > layout.channels)) begin
+        `uvm_fatal("DDR_MODEL", "activation source region exceeds tensor bounds")
+        return packet;
+      end
+      packet.packet_type = 1;
+      packet.job_id = job_id;
+      packet.tensor_id = tensor_id;
+      packet.layer_id = layer_id;
+      packet.tile_x = tile_x;
+      packet.tile_y = tile_y;
+      packet.tile_width = tile_width;
+      packet.tile_height = tile_height;
+      packet.channel_offset = channel_offset;
+      packet.channel_count = channel_count;
+      packet.payload = new[source_width * source_height * channel_count];
+      payload_index = 0;
+      for (int y = 0; y < source_height; y++) begin
+        for (int x = 0; x < source_width; x++) begin
+          for (int channel = 0; channel < channel_count; channel++) begin
+            address = element_address(layout, source_y + y, source_x + x,
+                                      channel_offset + channel);
+            if (!memory.exists(address)) begin
+              `uvm_fatal("DDR_MODEL", $sformatf(
+                "read before write tensor=%0d y=%0d x=%0d channel=%0d",
+                tensor_id, source_y + y, source_x + x,
+                channel_offset + channel))
+              return packet;
+            end
+            packet.payload[payload_index++] = memory[address];
+          end
+        end
+      end
+      return packet;
+    endfunction
+
     function bit compare_tensor(int unsigned tensor_id,
                                 byte unsigned expected[],
                                 output string reason);
@@ -901,6 +976,30 @@ package cnn_uvm_pkg;
     function void write(cnn_axi_lite_item t);
       sampled = t;
       axi_cg.sample();
+    endfunction
+  endclass
+
+  class cnn_fault_coverage extends uvm_component;
+    `uvm_component_utils(cnn_fault_coverage)
+    cnn_fault_kind_e sampled_kind;
+    bit sampled_recovered;
+    covergroup fault_cg;
+      option.per_instance = 1;
+      kind_cp: coverpoint sampled_kind;
+      recovery_cp: coverpoint sampled_recovered {
+        bins observed = {0};
+        bins recovered = {1};
+      }
+      kind_x_recovery: cross kind_cp, recovery_cp;
+    endgroup
+    function new(string name, uvm_component parent);
+      super.new(name, parent);
+      fault_cg = new;
+    endfunction
+    function void sample(cnn_fault_kind_e kind, bit recovered);
+      sampled_kind = kind;
+      sampled_recovered = recovered;
+      fault_cg.sample();
     endfunction
   endclass
 
@@ -1038,6 +1137,7 @@ package cnn_uvm_pkg;
     cnn_packet_coverage input_coverage;
     cnn_packet_coverage output_coverage;
     cnn_axi_coverage axi_coverage;
+    cnn_fault_coverage fault_coverage;
     cnn_virtual_sequencer virtual_sequencer;
     cnn_reg_block registers;
     cnn_reg_adapter reg_adapter;
@@ -1054,6 +1154,7 @@ package cnn_uvm_pkg;
       input_coverage = cnn_packet_coverage::type_id::create("input_coverage", this);
       output_coverage = cnn_packet_coverage::type_id::create("output_coverage", this);
       axi_coverage = cnn_axi_coverage::type_id::create("axi_coverage", this);
+      fault_coverage = cnn_fault_coverage::type_id::create("fault_coverage", this);
       virtual_sequencer = cnn_virtual_sequencer::type_id::create("virtual_sequencer", this);
       registers = cnn_reg_block::type_id::create("registers");
       registers.build();

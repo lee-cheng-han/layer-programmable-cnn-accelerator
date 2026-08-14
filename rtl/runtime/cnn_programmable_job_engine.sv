@@ -118,6 +118,7 @@ module cnn_programmable_job_engine #(
   ) u_runtime_parameter_banks (
     .clk(clk),
     .rst_n(rst_n),
+    .clear(1'b0),
     .clear_error(parameter_clear_error),
     .load_start(parameter_load_start),
     .load_abort(1'b0),

@@ -230,6 +230,7 @@ module tb_packed_dma_runtime_router;
   ) u_parameter_banks (
     .clk(clk),
     .rst_n(rst_n),
+    .clear(1'b0),
     .clear_error(clear_parameter_error),
     .load_start(parameter_load_start),
     .load_abort(parameter_load_abort),

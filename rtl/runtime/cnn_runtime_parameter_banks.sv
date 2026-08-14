@@ -13,6 +13,7 @@ module cnn_runtime_parameter_banks #(
 )(
   input  logic clk,
   input  logic rst_n,
+  input  logic clear,
   input  logic clear_error,
 
   input  logic load_start,
@@ -275,17 +276,25 @@ module cnn_runtime_parameter_banks #(
       end
     end else begin
       load_done <= 1'b0;
-      if (clear_error) begin
+      if (clear) begin
+        load_state <= S_IDLE;
+        bank_valid <= 2'b00;
+        compute_active <= 1'b0;
+        weight_count <= '0;
+        bias_count <= '0;
+        error <= 1'b0;
+        error_code <= PARAMETER_OK;
+      end else if (clear_error) begin
         error <= 1'b0;
         error_code <= PARAMETER_OK;
       end
 
-      if (parameter_ready) begin
+      if (!clear && parameter_ready) begin
         compute_bank <= matching_bank;
         compute_active <= 1'b1;
       end
 
-      if (parameter_release) begin
+      if (!clear && parameter_release) begin
         if (compute_active) begin
           bank_valid[compute_bank] <= 1'b0;
           compute_active <= 1'b0;
@@ -295,13 +304,13 @@ module cnn_runtime_parameter_banks #(
         end
       end
 
-      if (load_abort && (load_state != S_IDLE)) begin
+      if (!clear && load_abort && (load_state != S_IDLE)) begin
         load_state <= S_IDLE;
         bank_valid[load_bank] <= 1'b0;
         load_done <= 1'b1;
         error <= 1'b1;
         error_code <= PARAMETER_BAD_CONFIG;
-      end else case (load_state)
+      end else if (!clear) case (load_state)
         S_IDLE: begin
           if (load_start) begin
             if (!load_ready) begin

@@ -26,6 +26,11 @@ atomically activated, and reused across multiple images.
 | 11 | Add autonomous DDR fetching | Planned |
 | 12 | Expand protocol, randomized, golden, and negative verification | Complete for pre-board scope |
 | 13 | Optimize performance and validate physical hardware | Planned |
+| 14 | Validate a learned model and build an ONNX import path | Planned after board baseline |
+| 15 | Harden firmware, diagnostics, and recovery | Planned |
+| 16 | Add formal, CDC/RDC, and long-duration verification | Planned |
+| 17 | Evaluate command queues, scatter-gather DMA, and additional operators | Optional after profiling |
+| 18 | Add deployment security and field-update safeguards | Optional deployment scope |
 
 Phase 5 accepts descriptor-driven sequencing through a temporary or
 software-reloaded parameter path. Phase 6 is the point at which networks of one
@@ -111,7 +116,7 @@ documented interface or an isolated module.
 | Priority | Improvement | Current state | Completion gate |
 |---:|---|---|---|
 | 1 | Close actual RTL tensor chaining | Implemented | The UVM DDR model scatters observed RTL output packets into strided tensor memory and gathers that memory for the next layer; the two-layer test injects no intermediate golden tensor |
-| 2 | Complete UVM verification and coverage closure | U0-U3 complete for directed scope | Remaining U4-U5 gates add constrained-random faults, assertions, traceability, and documented coverage closure |
+| 2 | Complete UVM verification and coverage closure | U0-U3 complete; U4 implementation complete | Correct the local simulator-license host mismatch, archive U4 execution logs, then complete U5 assertions, traceability, and coverage closure |
 | 3 | Improve structured error propagation | Partial | First-failure records identify subsystem, model generation, layer, tensor, tile, packet field, observed value, and expected range for every programmable-runtime failure |
 | 4 | Complete runtime observability | Partial | Per-layer and per-job cycles, MAC-active cycles, input starvation, output backpressure, parameter stalls, bytes, MACs, and saturation events are software-visible and tested |
 | 5 | Expand measurable verification coverage | Baseline complete | CI records coverage across 1-8 layers, both kernels, both strides, all activations and residual modes, asymmetric boundaries, channel tails, partial beats, clipping, and multiple deterministic seeds |
@@ -123,6 +128,14 @@ documented interface or an isolated module.
 | 11 | Retire the fixed-network compatibility path | Waiting for board parity | Legacy execution RTL, software, build targets, and documentation are removed only after programmable hardware regression parity |
 | 12 | Add autonomous PL-side DDR fetching | Optional after board baseline | A descriptor-driven AXI master fetches parameters and tiles with bounded bursts, arbitration, timeout, structured recovery, and software fallback |
 | 13 | Produce the final demonstration | Planned | 224x224 and 512x512 examples include input/output images, measured latency and throughput, device view, UART transcript, and ILA evidence |
+| 14 | Validate a real learned workload | Planned after board baseline | A supported image-to-image ONNX model compiles reproducibly, matches the software reference within declared INT8 tolerances, and reports PSNR, SSIM, exact-match, and saturation metrics |
+| 15 | Complete the model compiler toolchain | Planned | Import, shape inference, capability validation, tensor lifetime assignment, operator fusion, tile planning, package inspection, and deterministic package generation are tested end to end |
+| 16 | Raise firmware quality to production discipline | Partial | Platform, DMA, scheduler, model-loader, and application layers have host tests, static analysis, sanitizers, overflow checks, typed errors, retained diagnostics, and documented memory/cache contracts |
+| 17 | Add formal and static hardware signoff | Planned | Formal properties cover FIFO accounting, bank ownership, lifecycle atomicity, bounds, and forward progress; CDC/RDC, reset, latch, and synthesis/simulation checks have reviewed zero-error reports |
+| 18 | Add long-duration and differential verification | Planned | Python, host C, RTL, and board outputs are compared over overnight randomized runs with reset, clock-startup, AXI-latency, packet-fragmentation, counter-wrap, and simultaneous IRQ/error injection |
+| 19 | Optimize from measured bottlenecks | Board measurements required | Profiling attributes cycles to compute, parameter loading, DMA, backpressure, and software; tile size, bank overlap, lane utilization, and parallelism are changed only when measured results justify them |
+| 20 | Evaluate advanced scheduling and operators | Optional after profiling | Scatter-gather DMA, command queues, autonomous fetching, depthwise convolution, and additional activations are accepted only with a target-model need and quantified cost/benefit |
+| 21 | Add deployment security and resilience | Optional deployment scope | All DDR ranges and arithmetic are validated; authenticated packages, rollback policy, watchdog behavior, parameter integrity, and brownout/partial-transfer recovery are defined and tested where required |
 
 ### Existing Evidence Mapped To The Plan
 
@@ -142,10 +155,9 @@ documented interface or an isolated module.
 
 ## Remaining Major Milestones
 
-1. **UVM randomization and coverage closure:** build on the passing register,
-   lifecycle, recovery, smoke, closed-loop DDR, and compiler-reference tests to
-   complete compiler-generated randomized 1-8-layer faults, SVA, traceability,
-   and merged functional coverage closure through stages U4-U5.
+1. **UVM execution and coverage closure:** execute the implemented U4
+   randomized/fault campaign after correcting the simulator license, then add
+   U5 SVA, traceability, and merged functional coverage closure.
 2. **Diagnostics, counters, and ABI generation:** finish structured first-fault
    records, per-layer performance records, and one-source generation of Python,
    C, and SystemVerilog ABI definitions.
@@ -163,6 +175,107 @@ documented interface or an isolated module.
    retire the fixed-network compatibility path.
 7. **Optional autonomous fetching:** consider a PL-side DDR master only after
    the software-managed board baseline is measured and stable.
+8. **Learned-model and compiler validation:** import one compatible
+   image-to-image ONNX network, reject unsupported graphs precisely, generate
+   a deterministic package and tile plan, and compare Python, host-C, RTL, and
+   board outputs using exact-match, PSNR, SSIM, and saturation statistics.
+9. **Firmware and hardware hardening:** complete typed errors, retained fault
+   snapshots, host-testable hardware abstraction, static analysis, sanitizers,
+   formal properties, CDC/RDC analysis, and long-duration recovery testing.
+10. **Measurement-led architecture extensions:** use board profiles to decide
+    whether scatter-gather DMA, a command queue, autonomous fetching, channel
+    packing, more parallelism, or additional operators provide enough benefit
+    to justify their area and verification cost.
+
+## Post-Baseline Engineering Backlog
+
+These items extend the required board baseline. They are ordered by dependency;
+features in the optional groups are not completion requirements for the V1
+accelerator unless a selected workload or deployment environment requires them.
+
+### Real Models And Compiler
+
+- Import the supported ONNX subset and provide exact diagnostics for unsupported
+  operators, shapes, quantization records, and graph topology.
+- Add shape inference, tensor lifetime analysis, automatic tensor identifiers,
+  compatible convolution/bias/activation/residual fusion, and scratchpad-aware
+  tile planning.
+- Emit deterministic package manifests containing compiler version, source-model
+  hash, ABI version, tensor allocation, MAC count, memory traffic, and estimated
+  latency.
+- Add package inspection, disassembly, ABI migration, and reproducibility tools.
+- Establish a fixed benchmark corpus with known package and output hashes, then
+  quantify INT8 accuracy using exact-match rate, PSNR, SSIM, and saturation.
+
+### Firmware Quality And Runtime Behavior
+
+- Separate platform, DMA, accelerator, model-loader, scheduler, and application
+  ownership behind a host-testable hardware abstraction layer.
+- Apply warnings-as-errors, `clang-tidy`, `cppcheck`, host sanitizers, and a
+  documented CERT C or selected MISRA C policy to portable runtime code.
+- Test descriptor arithmetic, pointer ranges, alignment, timeout wraparound,
+  cache-line boundaries, malformed packages, and repeated model replacement.
+- Provide typed status codes, first-fault snapshots retained across soft reset,
+  structured UART records, boot-time known-answer tests, and an explicit runtime
+  state machine for load, activate, submit, complete, abort, and recover.
+- Complete interrupt-driven scheduling and deterministic DMA-channel recovery;
+  consider watchdog and multicore ownership only when the deployment requires
+  them. FreeRTOS or Linux integration remains a separate target-specific port,
+  not part of the bare-metal baseline.
+
+### RTL Robustness And Observability
+
+- Extend assertions to descriptor bounds, tensor and bank ownership, packet
+  accounting, legal lifecycle transitions, bounded completion, and interrupt
+  rearming.
+- Expose a capability block and version record containing ABI support, tensor
+  limits, operators, parallelism, memory capacities, and optional features.
+- Define atomic performance snapshots, counter-overflow behavior, per-layer
+  timeout controls, and structured fault records with model, layer, tensor,
+  tile, packet field, observed value, and expected range.
+- Review reset behavior, BRAM initialization and integrity, illegal accesses,
+  and every PS/PL clock or reset crossing with CDC/RDC tooling.
+
+### Verification Signoff
+
+- Prove FIFO accounting, parameter-bank exclusivity, atomic model activation,
+  bounds safety, and selected forward-progress properties with formal methods.
+- Collect statement, branch, toggle, FSM, assertion, and functional coverage;
+  set explicit targets, review exclusions, and map requirements to tests and
+  coverpoints.
+- Differentially compare Python, host C, RTL, and board behavior over retained
+  randomized seeds, including resets in every phase, AXI stalls, malformed
+  packets, stale identifiers, CRC failures, counter wrap, and simultaneous
+  completion/error events.
+- Run overnight stress and mutation campaigns, minimize failures, and archive
+  seeds, packages, logs, coverage databases, and waveforms in licensed CI.
+
+### Measurement-Led Optimization
+
+- Attribute board cycles and bytes to computation, parameter refill, input and
+  output DMA, software setup, starvation, and backpressure before changing RTL.
+- Measure parameter-bank overlap, halo overhead, realistic DDR bandwidth, RGB
+  first-layer lane utilization, CPU load, recovery latency, power, and energy
+  per image.
+- Tune tile geometry and compare `PC`/`PK` configurations using routed timing,
+  utilization, congestion, bandwidth, power, and measured throughput rather
+  than arithmetic peak alone.
+- Evaluate scatter-gather DMA, hardware command queues, autonomous PL fetching,
+  and deterministic cancellation or preemption only after profiling identifies
+  control overhead as a material bottleneck.
+- Add depthwise convolution, extra activations, compression, or Winograd only
+  when a chosen model needs them and the accuracy, area, bandwidth, and
+  verification tradeoff is quantified.
+
+### Deployment Security And Resilience
+
+- Validate every package offset, size, multiplication, tensor range, and DMA
+  address before hardware submission, and confine DMA to the reserved workspace.
+- Add authenticated model packages, generation rollback policy, and field-update
+  rules only when models can originate outside the trusted firmware image.
+- Define and test parameter-memory integrity, processor/PL reset interaction,
+  brownout behavior, partial-transfer cleanup, and preservation of the previous
+  active model after failed replacement.
 
 ## Final Workflow
 

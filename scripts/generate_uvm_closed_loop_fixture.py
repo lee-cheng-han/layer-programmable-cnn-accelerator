@@ -5,13 +5,14 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import random
 import struct
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from models.cnn_abi import parse_model_package
+from models.cnn_abi import NO_TENSOR_ID, parse_model_package
 from models.model_compiler import compile_model
 from models.package_executor import execute_model_package
 
@@ -80,6 +81,20 @@ def _write_packet_table(output: Path, prefix: str, packets) -> None:
         "tile_width": (16, (packet["tile_width"] for packet in packets)),
         "tile_height": (16, (packet["tile_height"] for packet in packets)),
         "channels": (16, (packet["channels"] for packet in packets)),
+        "source_x": (
+            16, (packet.get("source_x", packet["tile_x"]) for packet in packets)
+        ),
+        "source_y": (
+            16, (packet.get("source_y", packet["tile_y"]) for packet in packets)
+        ),
+        "source_width": (
+            16,
+            (packet.get("source_width", packet["tile_width"]) for packet in packets),
+        ),
+        "source_height": (
+            16,
+            (packet.get("source_height", packet["tile_height"]) for packet in packets),
+        ),
         "payload_start": (16, starts),
         "payload_length": (16, lengths),
     }
@@ -133,19 +148,147 @@ def _model_spec():
     }
 
 
+def _random_model_spec(layer_count: int, seed: int):
+    rng = random.Random(seed)
+    input_channels = rng.randint(1, 2)
+    current_channels = input_channels
+    layers = []
+    for layer_index in range(layer_count):
+        kernel = 3 if (layer_index + seed) % 2 == 0 else 1
+        stride = 2 if layer_index == 0 and seed % 3 == 0 else 1
+        output_channels = rng.randint(1, 2)
+        quant_shift = rng.randint(0, 2)
+        weight_count = kernel * kernel * current_channels * output_channels
+        padding = 1 if kernel == 3 else 0
+        if layer_index == 0 and kernel == 3 and seed % 5 == 0:
+            padding = {"top": 0, "bottom": 1, "left": 1, "right": 0}
+        layers.append({
+            "name": f"random_layer_{layer_index}",
+            "output": f"tensor_{layer_index + 1}",
+            "output_channels": output_channels,
+            "kernel_size": kernel,
+            "stride": stride,
+            "padding": padding,
+            "activation": "relu" if rng.randrange(2) else "none",
+            "bias_enable": True,
+            "bias": [rng.randint(-4, 4) for _ in range(output_channels)],
+            "quant_multipliers": [1] * output_channels,
+            "quant_shifts": [quant_shift] * output_channels,
+            "tile_width_hint": 2,
+            "tile_height_hint": 2,
+            "weights": [rng.randint(-2, 2) for _ in range(weight_count)],
+        })
+        current_channels = output_channels
+    return {
+        "format": "cnn-accelerator-model-v1",
+        "model_id": 0x5556_0000 | (seed & 0xFFFF),
+        "model_generation_id": seed,
+        "input": {
+            "name": "input", "width": 4, "height": 4,
+            "channels": input_channels,
+        },
+        "layers": layers,
+    }
+
+
+def _residual_model_spec(mode: str):
+    return {
+        "format": "cnn-accelerator-model-v1",
+        "model_id": 0x5556_5200 | (1 if mode == "add" else 2),
+        "model_generation_id": 20260812,
+        "input": {"name": "input", "width": 4, "height": 4, "channels": 1},
+        "layers": [{
+            "name": f"residual_{mode}",
+            "output": "output",
+            "output_channels": 1,
+            "kernel_size": 1,
+            "stride": 1,
+            "padding": 0,
+            "activation": "none",
+            "bias_enable": False,
+            "quantization_profile": "input",
+            "quant_multiplier": 1,
+            "quant_shift": 0,
+            "tile_width_hint": 2,
+            "tile_height_hint": 2,
+            "weights": [1],
+            "residual": "input",
+            "residual_mode": mode,
+        }],
+    }
+
+
+def _saturation_model_spec():
+    return {
+        "format": "cnn-accelerator-model-v1",
+        "model_id": 0x5556_5A70,
+        "model_generation_id": 20260812,
+        "input": {"name": "input", "width": 4, "height": 4, "channels": 1},
+        "layers": [{
+            "name": "forced_saturation",
+            "output": "output",
+            "output_channels": 1,
+            "kernel_size": 1,
+            "stride": 1,
+            "padding": 0,
+            "activation": "none",
+            "bias_enable": False,
+            "quant_multiplier": 1,
+            "quant_shift": 0,
+            "tile_width_hint": 2,
+            "tile_height_hint": 2,
+            "weights": [127],
+        }],
+    }
+
+
+def _input_tensor(width: int, height: int, channels: int, seed: int):
+    rng = random.Random(seed ^ 0xC001_C0DE)
+    return [
+        [[rng.randint(-12, 12) for _ in range(channels)] for _ in range(width)]
+        for _ in range(height)
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--layers", type=int, default=2)
+    parser.add_argument("--seed", type=int, default=20260811)
+    parser.add_argument("--randomized", action="store_true")
+    parser.add_argument(
+        "--profile",
+        choices=("directed", "randomized", "residual-add", "residual-subtract",
+                 "saturation"),
+    )
     args = parser.parse_args()
+    if not 1 <= args.layers <= 8:
+        parser.error("--layers must be in the range 1..8")
     args.output.mkdir(parents=True, exist_ok=True)
 
-    input_tensor = [
+    profile = args.profile or ("randomized" if args.randomized else "directed")
+    if profile == "randomized":
+        spec = _random_model_spec(args.layers, args.seed)
+    elif profile == "residual-add":
+        spec = _residual_model_spec("add")
+    elif profile == "residual-subtract":
+        spec = _residual_model_spec("subtract")
+    elif profile == "saturation":
+        spec = _saturation_model_spec()
+    else:
+        spec = _model_spec()
+    input_desc = spec["input"]
+    input_tensor = _input_tensor(
+        input_desc["width"], input_desc["height"], input_desc["channels"], args.seed
+    ) if profile == "randomized" else [
         [[-6], [-2], [3], [7]],
         [[-4], [0], [5], [9]],
         [[-8], [1], [4], [6]],
         [[-3], [2], [8], [10]],
     ]
-    package = compile_model(_model_spec())
+    if profile == "saturation":
+        input_tensor = [[[127] for _ in range(4)] for _ in range(4)]
+    package = compile_model(spec)
     final_tensor, tensor_values = execute_model_package(
         package, input_tensor, return_tensors=True
     )
@@ -169,7 +312,8 @@ def main() -> int:
     _write_mem(args.output / "metadata_data.mem", (op[4] for op in metadata), 32)
 
     parameter_packets = []
-    input_packets = []
+    activation_packets = []
+    residual_packets = []
     expected_packets = []
     for layer in layers:
         input_desc = tensor_by_id[layer.input_tensor_id]
@@ -198,20 +342,48 @@ def main() -> int:
                 "payload": package[layer.bias_offset:layer.bias_offset + layer.bias_size],
             })
         for tile in _tile_geometry(layer, input_desc, output_desc):
-            if layer.layer_id == 0:
-                input_packets.append({
+            activation_packets.append({
+                "type": 1,
+                "tensor_id": layer.input_tensor_id,
+                "layer_id": layer.layer_id,
+                "tile_x": tile["tile_x"],
+                "tile_y": tile["tile_y"],
+                "tile_width": tile["tile_width"],
+                "tile_height": tile["tile_height"],
+                "source_x": tile["source_x"],
+                "source_y": tile["source_y"],
+                "source_width": tile["source_width"],
+                "source_height": tile["source_height"],
+                "channels": input_desc.channels,
+                "payload": (
+                    _flatten_region(
+                        tensor_values[layer.input_tensor_id],
+                        tile["source_x"], tile["source_y"],
+                        tile["source_width"], tile["source_height"],
+                    ) if layer.layer_id == 0 else b""
+                ),
+            })
+            if layer.residual_tensor_id != NO_TENSOR_ID:
+                residual_desc = tensor_by_id[layer.residual_tensor_id]
+                residual_packets.append({
                     "type": 1,
-                    "tensor_id": layer.input_tensor_id,
+                    "tensor_id": layer.residual_tensor_id,
                     "layer_id": layer.layer_id,
                     "tile_x": tile["tile_x"],
                     "tile_y": tile["tile_y"],
                     "tile_width": tile["tile_width"],
                     "tile_height": tile["tile_height"],
-                    "channels": input_desc.channels,
-                    "payload": _flatten_region(
-                        tensor_values[layer.input_tensor_id],
-                        tile["source_x"], tile["source_y"],
-                        tile["source_width"], tile["source_height"],
+                    "source_x": tile["tile_x"],
+                    "source_y": tile["tile_y"],
+                    "source_width": tile["tile_width"],
+                    "source_height": tile["tile_height"],
+                    "channels": residual_desc.channels,
+                    "payload": (
+                        _flatten_region(
+                            tensor_values[layer.residual_tensor_id],
+                            tile["tile_x"], tile["tile_y"],
+                            tile["tile_width"], tile["tile_height"],
+                        ) if layer.residual_tensor_id == header.input_tensor_id else b""
                     ),
                 })
             expected_packets.append({
@@ -231,7 +403,13 @@ def main() -> int:
             })
 
     _write_packet_table(args.output, "parameter", parameter_packets)
-    _write_packet_table(args.output, "input", input_packets)
+    _write_packet_table(args.output, "activation", activation_packets)
+    residual_storage_packets = residual_packets or [{
+        "type": 1, "tensor_id": 0, "layer_id": 0,
+        "tile_x": 0, "tile_y": 0, "tile_width": 1, "tile_height": 1,
+        "channels": 1, "payload": b"\0",
+    }]
+    _write_packet_table(args.output, "residual", residual_storage_packets)
     _write_packet_table(args.output, "expected", expected_packets)
     _write_mem(
         args.output / "final_tensor.mem",
@@ -239,30 +417,44 @@ def main() -> int:
         8,
     )
 
-    intermediate = tensor_by_id[layers[0].output_tensor_id]
     final = tensor_by_id[header.output_tensor_id]
-    layer_zero_outputs = sum(
-        packet["layer_id"] == 0 for packet in expected_packets
+    output_tensors = [tensor_by_id[layer.output_tensor_id] for layer in layers]
+    _write_mem(args.output / "tensor_id.mem", (t.tensor_id for t in output_tensors), 16)
+    _write_mem(args.output / "tensor_base.mem", (t.ddr_offset for t in output_tensors), 64)
+    _write_mem(args.output / "tensor_width.mem", (t.width for t in output_tensors), 16)
+    _write_mem(args.output / "tensor_height.mem", (t.height for t in output_tensors), 16)
+    _write_mem(args.output / "tensor_channels.mem", (t.channels for t in output_tensors), 16)
+    _write_mem(
+        args.output / "tensor_row_stride.mem",
+        (t.row_stride for t in output_tensors), 32,
     )
+    _write_mem(
+        args.output / "tensor_pixel_stride.mem",
+        (t.pixel_stride for t in output_tensors), 32,
+    )
+    layer_output_counts = [
+        sum(packet["layer_id"] == layer for packet in expected_packets)
+        for layer in range(len(layers))
+    ]
+    _write_mem(args.output / "layer_output_count.mem", layer_output_counts, 16)
     constants = {
         "UVM_FIXTURE_METADATA_OPS": len(metadata),
         "UVM_FIXTURE_PARAMETER_PACKETS": len(parameter_packets),
         "UVM_FIXTURE_PARAMETER_BYTES": sum(len(p["payload"]) for p in parameter_packets),
-        "UVM_FIXTURE_INPUT_PACKETS": len(input_packets),
-        "UVM_FIXTURE_INPUT_BYTES": sum(len(p["payload"]) for p in input_packets),
+        "UVM_FIXTURE_LAYERS": len(layers),
+        "UVM_FIXTURE_TENSORS": len(output_tensors),
+        "UVM_FIXTURE_ACTIVATION_PACKETS": len(activation_packets),
+        "UVM_FIXTURE_ACTIVATION_BYTES": sum(len(p["payload"]) for p in activation_packets),
+        "UVM_FIXTURE_RESIDUAL_PACKETS": len(residual_packets),
+        "UVM_FIXTURE_RESIDUAL_PACKET_STORAGE": len(residual_storage_packets),
+        "UVM_FIXTURE_RESIDUAL_BYTES": sum(
+            len(p["payload"]) for p in residual_storage_packets
+        ),
         "UVM_FIXTURE_EXPECTED_PACKETS": len(expected_packets),
         "UVM_FIXTURE_EXPECTED_BYTES": sum(len(p["payload"]) for p in expected_packets),
-        "UVM_FIXTURE_LAYER_ZERO_OUTPUTS": layer_zero_outputs,
         "UVM_FIXTURE_FINAL_ELEMENTS": final.width * final.height * final.channels,
         "UVM_FIXTURE_JOB_ID": JOB_ID,
         "UVM_FIXTURE_MODEL_ID": header.model_id,
-        "UVM_FIXTURE_INTERMEDIATE_ID": intermediate.tensor_id,
-        "UVM_FIXTURE_INTERMEDIATE_BASE": intermediate.ddr_offset,
-        "UVM_FIXTURE_INTERMEDIATE_WIDTH": intermediate.width,
-        "UVM_FIXTURE_INTERMEDIATE_HEIGHT": intermediate.height,
-        "UVM_FIXTURE_INTERMEDIATE_CHANNELS": intermediate.channels,
-        "UVM_FIXTURE_INTERMEDIATE_ROW_STRIDE": intermediate.row_stride,
-        "UVM_FIXTURE_INTERMEDIATE_PIXEL_STRIDE": intermediate.pixel_stride,
         "UVM_FIXTURE_FINAL_ID": final.tensor_id,
         "UVM_FIXTURE_FINAL_BASE": final.ddr_offset,
         "UVM_FIXTURE_FINAL_WIDTH": final.width,
@@ -270,6 +462,15 @@ def main() -> int:
         "UVM_FIXTURE_FINAL_CHANNELS": final.channels,
         "UVM_FIXTURE_FINAL_ROW_STRIDE": final.row_stride,
         "UVM_FIXTURE_FINAL_PIXEL_STRIDE": final.pixel_stride,
+        "UVM_FIXTURE_SEED": args.seed,
+        "UVM_FIXTURE_EXPECT_SATURATION": int(profile == "saturation"),
+        "UVM_FIXTURE_PROFILE_ID": {
+            "directed": 0,
+            "randomized": 1,
+            "residual-add": 2,
+            "residual-subtract": 3,
+            "saturation": 4,
+        }[profile],
     }
     (args.output / "uvm_closed_loop_fixture.svh").write_text(
         "".join(
@@ -281,7 +482,8 @@ def main() -> int:
     (args.output / "model.cnn").write_bytes(package)
     print(
         "Wrote compiler-driven UVM fixture: "
-        f"layers={len(layers)} input_packets={len(input_packets)} "
+        f"profile={profile} layers={len(layers)} "
+        f"activation_packets={len(activation_packets)} "
         f"output_packets={len(expected_packets)}"
     )
     return 0

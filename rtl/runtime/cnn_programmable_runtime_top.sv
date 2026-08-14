@@ -443,7 +443,7 @@ module cnn_programmable_runtime_top #(
     .PC(PC), .PK(PK), .MAX_CIN(MAX_CIN), .MAX_COUT(MAX_COUT),
     .DATA_W(DATA_W), .BIAS_W(ACC_W), .COUNT_W(COUNT_W)
   ) u_parameters (
-    .clk(clk), .rst_n(rst_n), .clear_error(clear),
+    .clk(clk), .rst_n(rst_n), .clear(clear), .clear_error(clear),
     .load_start(parameter_load_start), .load_abort(parameter_load_abort),
     .load_ready(parameter_load_ready),
     .load_layer_id(parameter_load_layer_id),

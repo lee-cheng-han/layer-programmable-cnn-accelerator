@@ -9,6 +9,7 @@ module tb_runtime_parameter_banks;
   logic clk;
   logic rst_n;
   logic clear_error;
+  logic clear;
   logic load_start;
   logic load_ready;
   logic [2:0] load_layer_id;
@@ -64,6 +65,7 @@ module tb_runtime_parameter_banks;
   ) dut (
     .clk(clk),
     .rst_n(rst_n),
+    .clear(clear),
     .clear_error(clear_error),
     .load_start(load_start),
     .load_abort(1'b0),
@@ -160,6 +162,16 @@ module tb_runtime_parameter_banks;
       clear_error = 1'b1;
       @(negedge clk);
       clear_error = 1'b0;
+    end
+  endtask
+
+  task automatic pulse_clear;
+    begin
+      @(negedge clk);
+      clear = 1'b1;
+      @(negedge clk);
+      clear = 1'b0;
+      #1;
     end
   endtask
 
@@ -270,6 +282,7 @@ module tb_runtime_parameter_banks;
     checks = 0;
     errors = 0;
     rst_n = 1'b0;
+    clear = 1'b0;
     clear_error = 1'b0;
     load_start = 1'b0;
     load_layer_id = '0;
@@ -340,6 +353,12 @@ module tb_runtime_parameter_banks;
     wait_for_weight_read();
     check_value("prefetched layer weight", int'($signed(weight_mat_data[0][0])), 4);
     release_layer();
+
+    load_one_channel_layer(5, 1, 6, 1'b0, 0, 1'b0, 0, 1'b0);
+    acquire_layer(5);
+    pulse_clear();
+    check_value("abort clears compute ownership", int'(compute_active), 0);
+    check_value("abort invalidates banks", int'(bank_valid), 0);
 
     pulse_clear_error();
     load_one_channel_layer(3, 1, 5, 1'b0, 0, 1'b0, 0, 1'b1);

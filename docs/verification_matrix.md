@@ -11,7 +11,7 @@
 | golden generation | `make baremetal-headers` | Passing | writes deterministic tensors and C DMA packet header |
 | software runtime corpus | `make runtime-corpus-test` | Passing | 24 seeded packages, 1-8 layers, 108 total layers, and 2,792 tiles cross-check compiler packages against the C ABI, tile, packet, and workspace runtime |
 | package-to-RTL numeric flow | `make randomized-package-rtl-test` | Passing | seeded compiler package drives four mixed layers, 26 halo tiles, two-bank parameter recycling, randomized output backpressure, and 268 exact golden packet beats |
-| UVM environment | `make uvm-regression` | Passing on XSim 2026.1 | Six UVM 1.2 tests cover register access, AXI timing/strobes and complete RAL prediction, recovery, smoke execution, DDR chaining, and a compiler-produced mixed 3x3-to-1x1 package checked against Python; all finish with zero UVM errors or fatals |
+| UVM environment | `make uvm-u4` | U4 compiles/elaborates; execution blocked by local license host mismatch | Twelve UVM 1.2 tests plus residual and saturation profiles cover register/RAL access, protocol timing, reset, starvation/abort, stale IDs, packet ordering, checksums, replacement, IRQ, DDR chaining, and compiler-produced 1-8-layer packages checked against Python; zero-error dynamic campaign logs remain pending |
 | compute RTL | `tb_parallel_mac_array` | Covered | PC x PK signed INT8 MAC datapath |
 | post-processing RTL | `tb_parallel_requantizer` | Covered | per-channel multiply/shift, round-half-to-even ties, lane masks, and signed saturation |
 | residual output RTL | `tb_tile_output_serializer_numeric` | Covered | post-quantization INT8 add/subtract, positive/negative saturation, and clipping-event accounting |

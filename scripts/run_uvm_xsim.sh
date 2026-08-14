@@ -3,7 +3,7 @@ set -euo pipefail
 
 test_name="${UVM_TESTNAME:-cnn_uvm_smoke_test}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-build_dir="${TMPDIR:-/tmp}/cnn_uvm_xsim"
+build_dir="${UVM_BUILD_DIR:-${TMPDIR:-/tmp}/cnn_uvm_xsim}"
 if [[ -n "${XILINX_VIVADO:-}" ]]; then
   xilinx_root="$XILINX_VIVADO"
 elif command -v xvlog >/dev/null 2>&1; then
@@ -26,8 +26,15 @@ done
 
 rm -rf "$build_dir"
 mkdir -p "$build_dir"
-python3 "$repo_root/scripts/generate_uvm_closed_loop_fixture.py" \
-  --output "$build_dir/uvm_fixture"
+fixture_args=(--output "$build_dir/uvm_fixture")
+if [[ -n "${UVM_FIXTURE_PROFILE:-}" ]]; then
+  fixture_args+=(--profile "$UVM_FIXTURE_PROFILE" --layers "${UVM_FIXTURE_LAYERS:-2}"
+                 --seed "${UVM_FIXTURE_SEED:-20260812}")
+elif [[ "${UVM_FIXTURE_RANDOMIZED:-0}" == "1" ]]; then
+  fixture_args+=(--randomized --layers "${UVM_FIXTURE_LAYERS:-2}"
+                 --seed "${UVM_FIXTURE_SEED:-20260812}")
+fi
+python3 "$repo_root/scripts/generate_uvm_closed_loop_fixture.py" "${fixture_args[@]}"
 cd "$build_dir"
 cp "$xilinx_root/data/xsim/xsim.ini" ./xsim.ini
 
@@ -68,6 +75,7 @@ rtl_files=(
 )
 
 sources=(
+  verification/uvm/interfaces/cnn_reset_if.sv
   verification/uvm/interfaces/cnn_axi_lite_if.sv
   verification/uvm/interfaces/cnn_axis_if.sv
   verification/uvm/interfaces/cnn_status_if.sv

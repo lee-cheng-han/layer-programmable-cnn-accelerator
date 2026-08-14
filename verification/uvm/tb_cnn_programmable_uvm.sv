@@ -6,25 +6,25 @@ module tb_cnn_programmable_uvm;
   import cnn_uvm_tests_pkg::*;
 
   logic aclk = 1'b0;
-  logic aresetn = 1'b0;
   always #4 aclk = ~aclk;
 
+  cnn_reset_if reset_if(aclk);
   cnn_axi_lite_if axi_if(aclk);
   cnn_axis_if input_if(aclk);
   cnn_axis_if output_if(aclk);
   cnn_status_if status_if(aclk);
 
-  assign axi_if.aresetn = aresetn;
-  assign input_if.aresetn = aresetn;
-  assign output_if.aresetn = aresetn;
-  assign status_if.aresetn = aresetn;
+  assign axi_if.aresetn = reset_if.aresetn;
+  assign input_if.aresetn = reset_if.aresetn;
+  assign output_if.aresetn = reset_if.aresetn;
+  assign status_if.aresetn = reset_if.aresetn;
 
   cnn_programmable_system_top #(
     .PC(2), .PK(2), .MAX_CIN(2), .MAX_COUT(2),
-    .MAX_LAYERS(2), .MAX_TENSORS(4), .MAX_QUANTIZATIONS(3),
+    .MAX_LAYERS(8), .MAX_TENSORS(9), .MAX_QUANTIZATIONS(9),
     .MAX_TILE_WIDTH(2), .MAX_TILE_HEIGHT(2)
   ) dut (
-    .aclk(aclk), .aresetn(aresetn),
+    .aclk(aclk), .aresetn(reset_if.aresetn),
     .s_axi_awaddr(axi_if.awaddr), .s_axi_awvalid(axi_if.awvalid),
     .s_axi_awready(axi_if.awready), .s_axi_wdata(axi_if.wdata),
     .s_axi_wstrb(axi_if.wstrb), .s_axi_wvalid(axi_if.wvalid),
@@ -44,10 +44,11 @@ module tb_cnn_programmable_uvm;
   );
 
   initial begin
+    reset_if.aresetn = 1'b0;
     axi_if.reset_master();
     input_if.reset_source();
     repeat (6) @(posedge aclk);
-    aresetn = 1'b1;
+    reset_if.aresetn = 1'b1;
   end
 
   initial begin
@@ -59,11 +60,13 @@ module tb_cnn_programmable_uvm;
                                              "vif", output_if);
     uvm_config_db#(virtual cnn_status_if)::set(null, "uvm_test_top*",
                                                "status_vif", status_if);
+    uvm_config_db#(virtual cnn_reset_if)::set(null, "uvm_test_top*",
+                                              "reset_vif", reset_if);
     run_test();
   end
 
   initial begin
-    #2ms;
+    #10ms;
     $fatal(1, "UVM testbench timeout");
   end
 endmodule
