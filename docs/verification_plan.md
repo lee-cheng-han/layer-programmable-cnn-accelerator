@@ -75,7 +75,15 @@ make uvm-randomized
 make uvm-faults
 make uvm-protocol-ral
 make uvm-regression
+make uvm-signoff
+make uvm-u5
 ```
+
+`make uvm-signoff` validates the requirement-to-test-to-assertion-to-coverpoint
+manifest without a simulator license. `make uvm-u5` runs the licensed XSim
+coverage campaign and merges functional, statement, branch, condition, and
+toggle databases with `xcrg`. Assertions execute throughout the campaign, but
+a measured assertion-coverage score remains a separate signoff requirement.
 
 V1 uses ordinary PC/PK channel-tail masks. The first RGB layer is intentionally
 not channel-packed; verification therefore covers the explicit 3-channel tail

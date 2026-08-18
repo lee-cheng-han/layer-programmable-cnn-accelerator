@@ -116,7 +116,7 @@ documented interface or an isolated module.
 | Priority | Improvement | Current state | Completion gate |
 |---:|---|---|---|
 | 1 | Close actual RTL tensor chaining | Implemented | The UVM DDR model scatters observed RTL output packets into strided tensor memory and gathers that memory for the next layer; the two-layer test injects no intermediate golden tensor |
-| 2 | Complete UVM verification and coverage closure | U0-U3 complete; U4 implementation complete | Correct the local simulator-license host mismatch, archive U4 execution logs, then complete U5 assertions, traceability, and coverage closure |
+| 2 | Complete UVM verification and coverage closure | U4 complete; U5 functional target closed | Preserve the 96.72% functional result, obtain fresh code reports from a stable tool flow, review scoped exclusions, measure assertion coverage, and meet every remaining target |
 | 3 | Improve structured error propagation | Partial | First-failure records identify subsystem, model generation, layer, tensor, tile, packet field, observed value, and expected range for every programmable-runtime failure |
 | 4 | Complete runtime observability | Partial | Per-layer and per-job cycles, MAC-active cycles, input starvation, output backpressure, parameter stalls, bytes, MACs, and saturation events are software-visible and tested |
 | 5 | Expand measurable verification coverage | Baseline complete | CI records coverage across 1-8 layers, both kernels, both strides, all activations and residual modes, asymmetric boundaries, channel tails, partial beats, clipping, and multiple deterministic seeds |
@@ -155,9 +155,9 @@ documented interface or an isolated module.
 
 ## Remaining Major Milestones
 
-1. **UVM execution and coverage closure:** execute the implemented U4
-   randomized/fault campaign after correcting the simulator license, then add
-   U5 SVA, traceability, and merged functional coverage closure.
+1. **UVM coverage closure:** use the passing 22-case U4/U5 baseline to target
+   uncovered functional bins, establish reviewed DUT code-coverage scope and
+   exclusions, measure assertion coverage, and close every declared target.
 2. **Diagnostics, counters, and ABI generation:** finish structured first-fault
    records, per-layer performance records, and one-source generation of Python,
    C, and SystemVerilog ABI definitions.

@@ -10,8 +10,8 @@ module tb_cnn_programmable_uvm;
 
   cnn_reset_if reset_if(aclk);
   cnn_axi_lite_if axi_if(aclk);
-  cnn_axis_if input_if(aclk);
-  cnn_axis_if output_if(aclk);
+  cnn_axis_if input_if(aclk, 1'b1);
+  cnn_axis_if output_if(aclk, 1'b0);
   cnn_status_if status_if(aclk);
 
   assign axi_if.aresetn = reset_if.aresetn;

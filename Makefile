@@ -2,13 +2,14 @@ SHELL := /bin/bash
 
 TB ?= tb_axi_stream_full_network_golden_flow
 VITIS_DATA_DIR ?= $(CURDIR)/build/vitis_data
+UVM_COVERAGE_ROOT ?= $(CURDIR)/build/uvm_coverage
 VIVADO ?= $(shell command -v vivado 2>/dev/null || printf '%s' '$(HOME)/Xilinx/2026.1/Vivado/bin/vivado')
 VITIS ?= $(shell command -v vitis 2>/dev/null || printf '%s' '$(HOME)/Xilinx/2026.1/Vitis/bin/vitis')
 XSCT ?= $(shell command -v xsct 2>/dev/null || printf '%s' '$(HOME)/Xilinx/2026.1/Vitis/bin/xsct')
 BOOTGEN ?= $(shell command -v bootgen 2>/dev/null || printf '%s' '$(HOME)/Xilinx/2026.1/Vitis/bin/bootgen')
 
 .PHONY: xsim regression xsim-regression lint clean flow-report report-flow check-warnings docs-check preboard-proof
-.PHONY: unit tile-test programmable-runtime-test programmable-system-test randomized-package-rtl-test uvm-compile uvm-smoke uvm-closed-loop uvm-compiler-reference uvm-randomized uvm-faults uvm-u4 uvm-protocol-ral uvm-regression numeric-runtime-test descriptor-test parameter-bank-test programmable-engine-test packed-dma-test packed-dma-runtime-test packed-dma-writer-test model-test model-package-example golden-test synth-sweep synth-report
+.PHONY: unit tile-test programmable-runtime-test programmable-system-test randomized-package-rtl-test uvm-compile uvm-smoke uvm-closed-loop uvm-compiler-reference uvm-randomized uvm-faults uvm-u4 uvm-signoff uvm-coverage uvm-u5 uvm-protocol-ral uvm-regression numeric-runtime-test descriptor-test parameter-bank-test programmable-engine-test packed-dma-test packed-dma-runtime-test packed-dma-writer-test model-test model-package-example golden-test synth-sweep synth-report
 .PHONY: top-impl top-report programmable-top-synth programmable-top-impl programmable-top-report baremetal-headers baremetal-runtime-test runtime-corpus-test vitis-app
 .PHONY: zybo-z7-project zybo-z7-bitstream zybo-z7-xsa full-zybo-z7-flow
 .PHONY: boot-image full-preboard-proof program-zybo-z7
@@ -62,6 +63,16 @@ uvm-faults:
 	bash scripts/run_uvm_fault_campaign.sh
 
 uvm-u4: uvm-randomized uvm-faults
+
+uvm-signoff:
+	python3 scripts/check_uvm_signoff.py
+
+uvm-coverage: uvm-signoff
+	bash scripts/run_uvm_coverage_campaign.sh
+
+uvm-u5: uvm-coverage
+	python3 scripts/report_uvm_coverage.py \
+		--coverage-root "$(UVM_COVERAGE_ROOT)" --require-targets
 
 uvm-protocol-ral:
 	UVM_TESTNAME=cnn_uvm_protocol_ral_test bash scripts/run_uvm_xsim.sh

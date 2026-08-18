@@ -152,6 +152,8 @@ def _random_model_spec(layer_count: int, seed: int):
     rng = random.Random(seed)
     input_channels = rng.randint(1, 2)
     current_channels = input_channels
+    current_width = 4
+    current_height = 4
     layers = []
     for layer_index in range(layer_count):
         kernel = 3 if (layer_index + seed) % 2 == 0 else 1
@@ -159,9 +161,33 @@ def _random_model_spec(layer_count: int, seed: int):
         output_channels = rng.randint(1, 2)
         quant_shift = rng.randint(0, 2)
         weight_count = kernel * kernel * current_channels * output_channels
-        padding = 1 if kernel == 3 else 0
-        if layer_index == 0 and kernel == 3 and seed % 5 == 0:
-            padding = {"top": 0, "bottom": 1, "left": 1, "right": 0}
+        padding = 0
+        if kernel == 3:
+            padding_mask = (seed + 7 * layer_index) & 0xF
+            padding = {
+                "top": padding_mask & 1,
+                "bottom": (padding_mask >> 1) & 1,
+                "left": (padding_mask >> 2) & 1,
+                "right": (padding_mask >> 3) & 1,
+            }
+            output_width = (
+                current_width + padding["left"] + padding["right"] - kernel
+            ) // stride + 1
+            output_height = (
+                current_height + padding["top"] + padding["bottom"] - kernel
+            ) // stride + 1
+            if output_width < 1 or output_height < 1:
+                padding = {"top": 1, "bottom": 1, "left": 1, "right": 1}
+        padding_top = padding["top"] if isinstance(padding, dict) else padding
+        padding_bottom = padding["bottom"] if isinstance(padding, dict) else padding
+        padding_left = padding["left"] if isinstance(padding, dict) else padding
+        padding_right = padding["right"] if isinstance(padding, dict) else padding
+        current_width = (
+            current_width + padding_left + padding_right - kernel
+        ) // stride + 1
+        current_height = (
+            current_height + padding_top + padding_bottom - kernel
+        ) // stride + 1
         layers.append({
             "name": f"random_layer_{layer_index}",
             "output": f"tensor_{layer_index + 1}",
@@ -326,7 +352,7 @@ def main() -> int:
             "tile_y": 0,
             "tile_width": 0,
             "tile_height": 0,
-            "channels": 0,
+            "channels": input_desc.channels,
             "payload": package[layer.weight_offset:layer.weight_offset + layer.weight_size],
         })
         if layer.bias_size:
@@ -338,7 +364,7 @@ def main() -> int:
                 "tile_y": 0,
                 "tile_width": 0,
                 "tile_height": 0,
-                "channels": 0,
+                "channels": output_desc.channels,
                 "payload": package[layer.bias_offset:layer.bias_offset + layer.bias_size],
             })
         for tile in _tile_geometry(layer, input_desc, output_desc):
@@ -437,6 +463,28 @@ def main() -> int:
         for layer in range(len(layers))
     ]
     _write_mem(args.output / "layer_output_count.mem", layer_output_counts, 16)
+    _write_mem(args.output / "layer_kernel.mem", (layer.kernel_width for layer in layers), 8)
+    _write_mem(args.output / "layer_stride.mem", (layer.stride_x for layer in layers), 8)
+    _write_mem(
+        args.output / "layer_input_channels.mem",
+        (tensor_by_id[layer.input_tensor_id].channels for layer in layers), 16,
+    )
+    _write_mem(
+        args.output / "layer_output_channels.mem",
+        (tensor_by_id[layer.output_tensor_id].channels for layer in layers), 16,
+    )
+    _write_mem(args.output / "layer_activation.mem", (int(layer.activation) for layer in layers), 8)
+    _write_mem(args.output / "layer_residual.mem", (int(layer.residual_mode) for layer in layers), 8)
+    _write_mem(
+        args.output / "layer_padding.mem",
+        (
+            layer.padding_top
+            | (layer.padding_bottom << 1)
+            | (layer.padding_left << 2)
+            | (layer.padding_right << 3)
+            for layer in layers
+        ), 8,
+    )
     constants = {
         "UVM_FIXTURE_METADATA_OPS": len(metadata),
         "UVM_FIXTURE_PARAMETER_PACKETS": len(parameter_packets),

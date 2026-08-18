@@ -354,12 +354,19 @@ package cnn_uvm_pkg;
     endfunction
 
     task send_beat(bit [31:0] data, bit [3:0] keep, bit last);
+      int unsigned wait_cycles = 0;
       @(negedge vif.aclk);
       vif.tdata <= data;
       vif.tkeep <= keep;
       vif.tlast <= last;
       vif.tvalid <= 1'b1;
-      do @(posedge vif.aclk); while (!vif.tready);
+      do begin
+        @(posedge vif.aclk);
+        wait_cycles++;
+        if (wait_cycles == 10_000)
+          `uvm_fatal("AXIS_READY_TIMEOUT", $sformatf(
+            "input beat stalled data=%08x keep=%x last=%0b", data, keep, last))
+      end while (!vif.tready);
       @(negedge vif.aclk);
       vif.tvalid <= 1'b0;
       vif.tkeep <= '0;
@@ -922,7 +929,7 @@ package cnn_uvm_pkg;
       type_cp: coverpoint sampled.packet_type { bins legal[] = {[1:4]}; }
       layer_cp: coverpoint sampled.layer_id { bins layers[] = {[0:7]}; }
       channels_cp: coverpoint sampled.channel_count {
-        bins tail = {[1:3]}; bins vector = {4, 8, 16};
+        bins scalar = {1}; bins full_vector = {2};
       }
       payload_cp: coverpoint sampled.payload.size() {
         bins partial = {1, 2, 3}; bins full_beats = {[4:4096]};
@@ -1000,6 +1007,70 @@ package cnn_uvm_pkg;
       sampled_kind = kind;
       sampled_recovered = recovered;
       fault_cg.sample();
+    endfunction
+  endclass
+
+  class cnn_model_coverage extends uvm_component;
+    `uvm_component_utils(cnn_model_coverage)
+    int unsigned sampled_layer_count;
+    int unsigned sampled_kernel;
+    int unsigned sampled_stride;
+    int unsigned sampled_input_channels;
+    int unsigned sampled_output_channels;
+    int unsigned sampled_activation;
+    int unsigned sampled_residual;
+    bit [3:0] sampled_padding;
+    int unsigned sampled_profile;
+    covergroup model_cg;
+      option.per_instance = 1;
+      layer_count_cp: coverpoint sampled_layer_count {
+        bins single = {1}; bins short_network = {[2:4]};
+        bins deep_network = {[5:8]};
+      }
+      kernel_cp: coverpoint sampled_kernel { bins conv1x1 = {1}; bins conv3x3 = {3}; }
+      stride_cp: coverpoint sampled_stride { bins one = {1}; bins two = {2}; }
+      input_channels_cp: coverpoint sampled_input_channels {
+        bins scalar = {1}; bins full_vector = {2};
+      }
+      output_channels_cp: coverpoint sampled_output_channels {
+        bins scalar = {1}; bins full_vector = {2};
+      }
+      activation_cp: coverpoint sampled_activation { bins none = {0}; bins relu = {1}; }
+      residual_cp: coverpoint sampled_residual {
+        bins none = {0}; bins add = {1}; bins subtract = {2};
+      }
+      padding_cp: coverpoint sampled_padding {
+        bins none = {0}; bins symmetric = {4'b1111};
+        bins asymmetric[] = {[1:14]};
+      }
+      profile_cp: coverpoint sampled_profile {
+        bins directed = {0}; bins randomized = {1}; bins residual_add = {2};
+        bins residual_subtract = {3}; bins saturation = {4};
+      }
+      kernel_x_stride: cross kernel_cp, stride_cp;
+      activation_x_residual: cross activation_cp, residual_cp;
+      kernel_x_channels: cross kernel_cp, input_channels_cp, output_channels_cp;
+    endgroup
+    function new(string name, uvm_component parent);
+      super.new(name, parent);
+      model_cg = new;
+    endfunction
+    function void sample(
+      int unsigned layer_count, int unsigned kernel, int unsigned stride,
+      int unsigned input_channels, int unsigned output_channels,
+      int unsigned activation, int unsigned residual, bit [3:0] padding,
+      int unsigned profile
+    );
+      sampled_layer_count = layer_count;
+      sampled_kernel = kernel;
+      sampled_stride = stride;
+      sampled_input_channels = input_channels;
+      sampled_output_channels = output_channels;
+      sampled_activation = activation;
+      sampled_residual = residual;
+      sampled_padding = padding;
+      sampled_profile = profile;
+      model_cg.sample();
     endfunction
   endclass
 
@@ -1138,6 +1209,7 @@ package cnn_uvm_pkg;
     cnn_packet_coverage output_coverage;
     cnn_axi_coverage axi_coverage;
     cnn_fault_coverage fault_coverage;
+    cnn_model_coverage model_coverage;
     cnn_virtual_sequencer virtual_sequencer;
     cnn_reg_block registers;
     cnn_reg_adapter reg_adapter;
@@ -1155,6 +1227,7 @@ package cnn_uvm_pkg;
       output_coverage = cnn_packet_coverage::type_id::create("output_coverage", this);
       axi_coverage = cnn_axi_coverage::type_id::create("axi_coverage", this);
       fault_coverage = cnn_fault_coverage::type_id::create("fault_coverage", this);
+      model_coverage = cnn_model_coverage::type_id::create("model_coverage", this);
       virtual_sequencer = cnn_virtual_sequencer::type_id::create("virtual_sequencer", this);
       registers = cnn_reg_block::type_id::create("registers");
       registers.build();

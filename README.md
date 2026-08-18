@@ -331,6 +331,9 @@ make uvm-compiler-reference # run a compiler package against Python and chained 
 make uvm-randomized     # seeded compiler-generated 1-8-layer UVM campaign
 make uvm-faults         # reset, abort, ordering, lifecycle, IRQ, and numeric faults
 make uvm-u4             # complete randomized and fault campaign
+make uvm-signoff        # validate requirements, assertions, coverage, and exclusions
+make uvm-coverage       # run and merge the licensed XSim coverage campaign
+make uvm-u5             # require every U5 coverage target to be measured and met
 make uvm-protocol-ral  # verify AXI timing, strobes, and complete RAL prediction
 make uvm-regression    # execute all production UVM tests
 make golden-test      # generated tensor fixtures against integrated RTL

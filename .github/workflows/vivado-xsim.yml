@@ -3,6 +3,11 @@ name: Vivado FPGA
 on:
   workflow_dispatch:
     inputs:
+      run_uvm_coverage:
+        description: Run the licensed U5 UVM coverage campaign and xcrg merge
+        type: boolean
+        required: true
+        default: false
       run_bitstream:
         description: Also run the full Zybo Z7 bitstream/Vitis/BOOT.BIN flow
         type: boolean
@@ -57,7 +62,13 @@ jobs:
 
       - name: Compile and elaborate UVM environment
         run: |
+          make uvm-signoff
           make uvm-compile
+
+      - name: Run U5 UVM coverage and signoff
+        if: ${{ inputs.run_uvm_coverage }}
+        run: |
+          make uvm-u5
 
       - name: Upload simulation logs
         if: always()
@@ -70,6 +81,7 @@ jobs:
             *.log
             *.jou
             *_xsim_run.log
+            build/uvm_coverage/**
 
   zybo_z7:
     name: vivado / zybo-z7 · bitstream · xsa · elf · boot

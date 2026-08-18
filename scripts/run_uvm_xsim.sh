@@ -6,16 +6,25 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 build_dir="${UVM_BUILD_DIR:-${TMPDIR:-/tmp}/cnn_uvm_xsim}"
 if [[ -n "${XILINX_VIVADO:-}" ]]; then
   xilinx_root="$XILINX_VIVADO"
+  xvlog_bin="${XVLOG:-$xilinx_root/bin/xvlog}"
+  xelab_bin="${XELAB:-$xilinx_root/bin/xelab}"
+  xsim_bin="${XSIM:-$xilinx_root/bin/xsim}"
 elif command -v xvlog >/dev/null 2>&1; then
   xilinx_root="$(cd "$(dirname "$(command -v xvlog)")/.." && pwd)"
+  xvlog_bin="${XVLOG:-$(command -v xvlog)}"
+  xelab_bin="${XELAB:-$(command -v xelab)}"
+  xsim_bin="${XSIM:-$(command -v xsim)}"
 elif [[ -d "$HOME/Xilinx/2026.1/Vivado" ]]; then
   xilinx_root="$HOME/Xilinx/2026.1/Vivado"
+  xvlog_bin="${XVLOG:-$xilinx_root/bin/xvlog}"
+  xelab_bin="${XELAB:-$xilinx_root/bin/xelab}"
+  xsim_bin="${XSIM:-$xilinx_root/bin/xsim}"
 else
   xilinx_root="$HOME/Xilinx/2025.2/Vivado"
+  xvlog_bin="${XVLOG:-$xilinx_root/bin/xvlog}"
+  xelab_bin="${XELAB:-$xilinx_root/bin/xelab}"
+  xsim_bin="${XSIM:-$xilinx_root/bin/xsim}"
 fi
-xvlog_bin="${XVLOG:-$(command -v xvlog 2>/dev/null || printf '%s' "$xilinx_root/bin/xvlog")}"
-xelab_bin="${XELAB:-$(command -v xelab 2>/dev/null || printf '%s' "$xilinx_root/bin/xelab")}"
-xsim_bin="${XSIM:-$(command -v xsim 2>/dev/null || printf '%s' "$xilinx_root/bin/xsim")}"
 
 for tool in "$xvlog_bin" "$xelab_bin" "$xsim_bin"; do
   if [[ ! -x "$tool" ]]; then
@@ -98,8 +107,17 @@ done
   --include "$build_dir/uvm_fixture" \
   --include "$xilinx_root/data/xsim/system_verilog/uvm_include" \
   "${rtl_files[@]}" "${sources[@]}"
+coverage_args=()
+if [[ "${UVM_COVERAGE:-0}" == "1" ]]; then
+  coverage_dir="${UVM_COVERAGE_DIR:-$build_dir/coverage}"
+  coverage_name="${UVM_COVERAGE_NAME:-$test_name}"
+  mkdir -p "$coverage_dir"
+  coverage_args+=(--cc_type sbct --cov_db_dir "$coverage_dir"
+                  --cov_db_name "$coverage_name")
+fi
+
 "$xelab_bin" --uvm_version 1.2 -L uvm --debug typical \
-  --timescale 1ns/1ps \
+  --timescale 1ns/1ps "${coverage_args[@]}" \
   tb_cnn_programmable_uvm -s cnn_programmable_uvm_sim
 
 if [[ "${UVM_COMPILE_ONLY:-0}" == "1" ]]; then

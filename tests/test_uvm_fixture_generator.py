@@ -46,6 +46,14 @@ class UvmFixtureGeneratorTests(unittest.TestCase):
                     len((output / "layer_output_count.mem").read_text().splitlines()),
                     layers,
                 )
+                for filename in (
+                    "layer_kernel.mem", "layer_stride.mem",
+                    "layer_input_channels.mem", "layer_output_channels.mem",
+                    "layer_activation.mem", "layer_residual.mem", "layer_padding.mem",
+                ):
+                    self.assertEqual(
+                        len((output / filename).read_text().splitlines()), layers
+                    )
                 self.assertTrue((output / "model.cnn").stat().st_size > 0)
                 self.assertTrue((output / "activation_source_width.mem").is_file())
                 self.assertTrue((output / "final_tensor.mem").stat().st_size > 0)
@@ -58,6 +66,30 @@ class UvmFixtureGeneratorTests(unittest.TestCase):
                 (first / filename).read_bytes(),
                 (second / filename).read_bytes(),
             )
+
+    def test_randomized_metadata_matches_two_lane_uvm_configuration(self):
+        output = self.generate(8, 20260820)
+        input_channels = {
+            int(value, 16)
+            for value in (output / "layer_input_channels.mem").read_text().splitlines()
+        }
+        output_channels = {
+            int(value, 16)
+            for value in (output / "layer_output_channels.mem").read_text().splitlines()
+        }
+        parameter_channels = [
+            int(value, 16)
+            for value in (output / "parameter_channels.mem").read_text().splitlines()
+        ]
+        padding_masks = [
+            int(value, 16)
+            for value in (output / "layer_padding.mem").read_text().splitlines()
+        ]
+        self.assertTrue(input_channels <= {1, 2})
+        self.assertTrue(output_channels <= {1, 2})
+        self.assertTrue(all(channel in {1, 2} for channel in parameter_channels))
+        self.assertTrue(all(0 <= mask <= 15 for mask in padding_masks))
+        self.assertTrue(any(mask not in {0, 15} for mask in padding_masks))
 
     def test_numeric_fault_profiles_emit_expected_packets(self):
         for profile, residual_packets, saturation in (

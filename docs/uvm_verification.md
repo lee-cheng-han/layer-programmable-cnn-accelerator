@@ -91,13 +91,10 @@ an equivalent compile script.
 
 ## Current Local Tool Status
 
-Vivado/XSim 2026.1 on the current host compiles every UVM source and elaborates
-the complete programmable DUT, including an eight-layer randomized fixture.
-The previously recorded directed regression completes with zero UVM errors and
-zero UVM fatals. The current U4 change set could not be dynamically rerun because
-XSim reported a simulator-license checkout failure; `make uvm-randomized` and
-the new CRC-recovery test remain the explicit execution gates when a license is
-available.
+Vivado/XSim 2025.2 on the current host executes the complete 22-case U4/U5
+campaign, including compiler-generated one- through eight-layer fixtures, with
+zero UVM errors and zero UVM fatals. Vivado 2026.1 remains the primary build
+toolchain, while 2025.2 is used for licensed coverage collection on this host.
 
 The randomized campaign defaults to two deterministic models for every layer
 count from 1 through 8. Reproduce or expand it with:
@@ -124,6 +121,14 @@ Implemented coverpoints include:
 - register-operation by address-region crosses
 - fault class and recovery outcome crosses
 
+The UVM regression elaborates production RTL with `PC=2`, `PK=2`,
+`MAX_CIN=2`, and `MAX_COUT=2` to keep randomized campaign turnaround bounded.
+Its channel coverage therefore distinguishes scalar one-channel traffic from
+full two-lane vectors. The target's 16-channel capacity is a separate
+parameterized RTL/implementation configuration and must not be inferred from
+this UVM coverage score alone. The exact UVM scope is recorded in
+`verification/uvm_signoff.json`.
+
 ## Verification Maturity Plan
 
 | Stage | Deliverable | Current status | Completion gate |
@@ -132,8 +137,46 @@ Implemented coverpoints include:
 | U1 | Executable regression | Complete locally | Register, smoke, recovery, closed-loop DDR, and compiler-reference tests produce zero-error UVM summaries; CI artifact and seed archival remain to be added |
 | U2 | Independent closed-loop checking | Complete for directed mixed-network scope | A real compiler package drives a two-layer 3x3-to-1x1 job; actual layer-0 RTL output is stored in behavioral DDR and reused by layer 1, then complete final memory is compared with the independent Python executor |
 | U3 | Protocol and RAL maturity | Complete for the single-outstanding interface | Deterministic AW/W/response timing variation, defensive packet validation, all 28 registers, byte-granular prediction, mirrors, reset values, access policies, byte strobes, and invalid-address responses are covered |
-| U4 | Constrained-random and fault campaign | Implementation complete; execution blocked by local license host mismatch | Two-seed compiler-generated 1-8-layer sweeps and reset, starvation/abort, stale-ID, ordering, checksum, replacement, IRQ, residual add/subtract, and saturation scenarios compile and elaborate; zero-error XSim logs are the remaining gate |
-| U5 | Coverage closure and signoff | Planned | Functional and assertion coverage are merged in CI, requirements map to tests and coverpoints, exclusions are reviewed, and all closure targets are met |
+| U4 | Constrained-random and fault campaign | Complete for the deterministic 22-case baseline | Compiler-generated 1-8-layer sweeps and reset, starvation/abort, stale-ID, ordering, checksum, replacement, IRQ, residual add/subtract, and saturation scenarios execute with zero UVM errors and fatals |
+| U5 | Coverage closure and signoff | Functional target closed; code/assertion targets open | Clean 23-case campaign reaches 96.72% functional coverage with zero UVM errors/fatals; merged code databases exist, but XSim 2025.2 crashes before emitting fresh code HTML, and assertion coverage remains unmeasured |
+
+### U5 Signoff Flow
+
+[`verification/uvm_signoff.json`](../verification/uvm_signoff.json) is the
+machine-readable signoff source. It maps each requirement to UVM tests,
+assertions, and coverpoints; records reviewed exclusions; and defines targets
+of 95% functional, 90% statement, 85% branch, 85% condition, 80% toggle, and
+100% assertion coverage. Every exclusion must include an identifier, scope,
+reason, and owner. The first reviewed exclusion records XSim's automatic
+omission of a 34,848-bit scratchpad array from toggle coverage because the
+simulator caps one variable at 32,768 bits; its externally visible behavior
+remains functionally covered.
+
+```bash
+make uvm-signoff   # validate symbols, mappings, exclusions, and targets
+make uvm-coverage  # execute deterministic runs and merge with xcrg
+make uvm-u5        # complete U5 coverage flow
+```
+
+`make uvm-coverage` completes collection even when targets have gaps so its
+artifacts remain available for diagnosis. `make uvm-u5` is the strict signoff
+gate and returns failure until all declared targets are measured and met.
+
+The coverage campaign runs register/RAL, protocol, recovery, reset, abort,
+ordering, replacement, IRQ, smoke, closed-loop DDR, residual, saturation, and
+compiler-generated randomized 1-8-layer cases. XSim databases, a merged
+database, text/HTML reports, logs, and the signoff manifest are retained under
+`build/uvm_coverage/`. Passing `make uvm-signoff` proves traceability integrity;
+it does not substitute for executing `make uvm-u5` and reviewing the measured
+coverage against every declared target.
+
+The initial measured campaign is retained under `build/uvm_coverage_2025/`.
+The clean closure campaign under `build/uvm_coverage_final/` passes all 23
+cases and raises functional coverage from 86.85% to 96.72%, closing the 95%
+target. `all_targets_met` remains false because fresh code scores and assertion
+coverage are not available. XSim 2025.2 creates the merged code database but
+segfaults before writing its HTML report; this tool failure is kept distinct
+from simulation and functional-coverage results.
 
 ## Planned Work Packages
 
@@ -173,16 +216,18 @@ Implemented coverpoints include:
     ordering, abort, replacement, and recovery tests only where U5 coverage
     identifies missing legal states; autonomous hardware DMA timeout remains
     outside the software-managed V1 architecture.
-11. Bind AXI, packet, lifecycle, bank-ownership, and internal progress SVA into
-    the UVM top and collect assertion pass/fail and coverage separately.
+11. Extend the implemented interface-level AXI-Lite, AXI-Stream, reset, status,
+    and interrupt SVA with lifecycle, bank-ownership, and internal-progress
+    properties where U5 reports identify unobserved requirements.
 
 ### Coverage Closure
 
-12. Define coverage targets, legal-bin exclusions, and crosses for kernel,
-    stride, channels, activation, residual, padding, packet type, and fault.
-13. Merge coverage databases across deterministic seeds in licensed CI and
-    publish trend and closure reports.
-14. Maintain requirement-to-test-to-assertion-to-coverpoint traceability and add
-    targeted sequences for every uncovered legal bin.
+12. Execute the defined model, packet, AXI, fault, and SVA coverage against the
+    checked-in targets; document every legal-bin exclusion with scope, reason,
+    and owner.
+13. Run the implemented deterministic database merge in licensed CI and publish
+    trend and closure reports.
+14. Maintain the machine-checked requirement-to-test-to-assertion-to-coverpoint
+    manifest and add targeted sequences for every uncovered legal bin.
 15. Archive at least one real design or verification bug discovered by the UVM
     campaign, including seed, symptom, root cause, fix, and regression test.

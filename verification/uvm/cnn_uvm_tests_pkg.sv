@@ -99,6 +99,21 @@ package cnn_uvm_tests_pkg;
                                           address, seq.response.response))
     endtask
 
+    task axi_write_expect_response(bit [11:0] address, bit [31:0] data,
+                                   bit [1:0] expected_response);
+      cnn_axi_single_sequence seq =
+        cnn_axi_single_sequence::type_id::create("axi_write_response_sequence");
+      seq.kind = AXI_WRITE;
+      seq.address = address;
+      seq.data = data;
+      seq.strobe = 4'hF;
+      seq.start(env.axi_agent.sequencer);
+      if (seq.response.response != expected_response)
+        `uvm_fatal("AXI_WRITE", $sformatf(
+          "write %03x response %0d expected %0d", address,
+          seq.response.response, expected_response))
+    endtask
+
     task axi_read(bit [11:0] address, output bit [31:0] data,
                   output bit [1:0] response,
                   input int unsigned address_delay = 0,
@@ -348,7 +363,7 @@ package cnn_uvm_tests_pkg;
     `uvm_component_utils(cnn_uvm_protocol_recovery_test)
     function new(string name, uvm_component parent); super.new(name, parent); endfunction
     task run_phase(uvm_phase phase);
-      byte unsigned malformed[] = '{1, 1};
+      byte unsigned malformed[] = '{1, 1, 1};
       cnn_axis_packet packet;
       bit [31:0] value;
       phase.raise_objection(this);
@@ -513,10 +528,13 @@ package cnn_uvm_tests_pkg;
       preload_parameters();
       axi_write(ADDR_IRQ_ENABLE, 1);
       run_valid_job();
-      repeat (4) @(posedge status_vif.aclk);
+      for (int poll = 0; poll < 100; poll++) begin
+        checked_read(ADDR_IRQ_STATUS, value);
+        if (value[0]) break;
+        if (poll == 99)
+          `uvm_fatal("DONE_IRQ", "completion status was not latched")
+      end
       if (!status_vif.irq) `uvm_fatal("DONE_IRQ", "completion IRQ did not assert")
-      checked_read(ADDR_IRQ_STATUS, value);
-      if (!value[0]) `uvm_fatal("DONE_IRQ", "completion status was not latched")
       env.fault_coverage.sample(FAULT_DONE_INTERRUPT, 0);
       axi_write(ADDR_IRQ_STATUS, 1);
       repeat (2) @(posedge status_vif.aclk);
@@ -633,6 +651,13 @@ package cnn_uvm_tests_pkg;
     bit [31:0] tensor_row_stride_mem[UVM_FIXTURE_TENSORS];
     bit [31:0] tensor_pixel_stride_mem[UVM_FIXTURE_TENSORS];
     bit [15:0] layer_output_count_mem[UVM_FIXTURE_LAYERS];
+    bit [7:0] layer_kernel_mem[UVM_FIXTURE_LAYERS];
+    bit [7:0] layer_stride_mem[UVM_FIXTURE_LAYERS];
+    bit [15:0] layer_input_channels_mem[UVM_FIXTURE_LAYERS];
+    bit [15:0] layer_output_channels_mem[UVM_FIXTURE_LAYERS];
+    bit [7:0] layer_activation_mem[UVM_FIXTURE_LAYERS];
+    bit [7:0] layer_residual_mem[UVM_FIXTURE_LAYERS];
+    bit [7:0] layer_padding_mem[UVM_FIXTURE_LAYERS];
 
     function new(string name, uvm_component parent); super.new(name, parent); endfunction
 
@@ -702,6 +727,13 @@ package cnn_uvm_tests_pkg;
       $readmemh("uvm_fixture/tensor_row_stride.mem", tensor_row_stride_mem);
       $readmemh("uvm_fixture/tensor_pixel_stride.mem", tensor_pixel_stride_mem);
       $readmemh("uvm_fixture/layer_output_count.mem", layer_output_count_mem);
+      $readmemh("uvm_fixture/layer_kernel.mem", layer_kernel_mem);
+      $readmemh("uvm_fixture/layer_stride.mem", layer_stride_mem);
+      $readmemh("uvm_fixture/layer_input_channels.mem", layer_input_channels_mem);
+      $readmemh("uvm_fixture/layer_output_channels.mem", layer_output_channels_mem);
+      $readmemh("uvm_fixture/layer_activation.mem", layer_activation_mem);
+      $readmemh("uvm_fixture/layer_residual.mem", layer_residual_mem);
+      $readmemh("uvm_fixture/layer_padding.mem", layer_padding_mem);
     endfunction
 
     function cnn_axis_packet build_fixture_packet(
@@ -794,18 +826,29 @@ package cnn_uvm_tests_pkg;
 
     task load_parameter_layer(int layer);
       bit [31:0] value;
+      bit [31:0] runtime_error;
       axi_write(ADDR_PARAMETER_LAYER, layer);
       for (int packet_index = 0;
            packet_index < UVM_FIXTURE_PARAMETER_PACKETS; packet_index++) begin
-        if (parameter_layer_mem[packet_index] == layer)
+        if (parameter_layer_mem[packet_index] == layer) begin
           send_packet(parameter_packet(packet_index));
+          checked_read(ADDR_RUNTIME_ERROR, runtime_error);
+          if (runtime_error[7:0] != 0)
+            `uvm_fatal("PARAMETER_PACKET", $sformatf(
+              "layer=%0d packet=%0d type=%0d runtime_error=%08x", layer,
+              packet_index, parameter_type_mem[packet_index], runtime_error))
+        end
       end
       for (int poll = 0; poll < 100; poll++) begin
         checked_read(ADDR_PARAMETER_BANKS, value);
-        if (value[1:0] != 0) break;
-        if (poll == 99)
+        if (((layer == 0 || layer >= 2) && value[1:0] != 0) ||
+            (layer == 1 && value[1:0] == 2'b11)) break;
+        if (poll == 99) begin
+          checked_read(ADDR_RUNTIME_ERROR, runtime_error);
           `uvm_fatal("PARAMETER", $sformatf(
-            "compiler parameter layer %0d did not become valid", layer))
+            "compiler parameter layer %0d did not become valid banks=%02b runtime_error=%08x",
+            layer, value[1:0], runtime_error))
+        end
       end
     endtask
 
@@ -864,6 +907,13 @@ package cnn_uvm_tests_pkg;
       string reason;
       phase.raise_objection(this);
       load_fixture_files();
+      for (int layer = 0; layer < UVM_FIXTURE_LAYERS; layer++) begin
+        env.model_coverage.sample(
+          UVM_FIXTURE_LAYERS, layer_kernel_mem[layer], layer_stride_mem[layer],
+          layer_input_channels_mem[layer], layer_output_channels_mem[layer],
+          layer_activation_mem[layer], layer_residual_mem[layer],
+          layer_padding_mem[layer][3:0], UVM_FIXTURE_PROFILE_ID);
+      end
       load_compiler_model();
       checked_read(ADDR_ACTIVE_MODEL_ID, value);
       if (value != UVM_FIXTURE_MODEL_ID)
@@ -885,10 +935,10 @@ package cnn_uvm_tests_pkg;
       for (int layer = 0; layer < UVM_FIXTURE_LAYERS; layer++) begin
         env.ddr_model.wait_for_tensor_packets(
           tensor_id_mem[layer], layer_output_count_mem[layer], 400us);
-        if (layer + 2 < UVM_FIXTURE_LAYERS)
-          load_parameter_layer(layer + 2);
-        if (layer + 1 < UVM_FIXTURE_LAYERS)
+        if (layer + 1 < UVM_FIXTURE_LAYERS) begin
+          if (layer + 1 >= 2) load_parameter_layer(layer + 1);
           send_layer_activations(layer + 1);
+        end
       end
       env.scoreboard.wait_for_matches(UVM_FIXTURE_EXPECTED_PACKETS, 400us);
       if (!env.ddr_model.compare_tensor(
@@ -1014,6 +1064,17 @@ package cnn_uvm_tests_pkg;
       if ((value != 32'h11BB_33DD) ||
           (env.registers.job_id.get_mirrored_value() != 32'h11BB_33DD))
         `uvm_fatal("BYTE_ENABLE", "zero-strobe write modified JOB_ID")
+
+      // Close every byte-lane class and the long response-latency class.
+      axi_write(ADDR_JOB_ID, 32'h0000_00A1, 4'b0001);
+      axi_write(ADDR_JOB_ID, 32'h0000_B200, 4'b0010);
+      axi_write(ADDR_JOB_ID, 32'h00C3_0000, 4'b0100);
+      axi_write(ADDR_JOB_ID, 32'hD400_0000, 4'b1000);
+      axi_write(ADDR_JOB_ID, 32'h5566_7788, 4'b0011, 0, 0, 40);
+
+      // Sample write traffic in progress and version address regions.
+      axi_write_expect_response(ADDR_COMPLETED_LAYERS, 32'h0, 2);
+      axi_write_expect_response(ADDR_VERSION, 32'h0, 2);
 
       env.registers.irq_enable.write(status, 32'h0000_0003);
       if (status != UVM_IS_OK) `uvm_fatal("RAL", "IRQ_ENABLE write failed")

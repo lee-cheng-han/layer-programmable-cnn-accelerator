@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "simulation_configuration": {
+    "pc": 2,
+    "pk": 2,
+    "max_input_channels": 2,
+    "max_output_channels": 2,
+    "max_tile_width": 2,
+    "max_tile_height": 2,
+    "scope": "Fast production-RTL UVM regression configuration; full 16-channel capacity is verified by dedicated RTL and implementation configurations."
+  },
+  "coverage_targets_percent": {
+    "functional": 95.0,
+    "statement": 90.0,
+    "branch": 85.0,
+    "condition": 85.0,
+    "toggle": 80.0,
+    "assertion": 100.0
+  },
+  "exclusions": [
+    {
+      "id": "EXCL-TOGGLE-001",
+      "scope": "banked_weight_lane_ram.lane_mem toggle coverage",
+      "reason": "XSim automatically omits the 34,848-bit unpacked memory because a single toggle-covered variable is limited to 32,768 bits; address, data, ownership, CRC, and output behavior remain covered functionally.",
+      "owner": "RTL verification"
+    },
+    {
+      "id": "EXCL-AXIS-001",
+      "scope": "Output AXI-Stream terminal TKEEP=4'b0111 in the PC=2/PK=2, 2x2-tile UVM configuration",
+      "reason": "One- or two-channel output tiles containing at most 2x2 pixels produce payload lengths of 1, 2, 4, or 8 bytes; a three-byte terminal beat is unreachable. Input TKEEP=0111 remains covered with malformed-packet stimulus.",
+      "owner": "RTL verification"
+    }
+  ],
+  "requirements": [
+    {
+      "id": "REQ-CTRL-001",
+      "description": "AXI-Lite transfers obey stability, response, strobe, and independent AW/W ordering rules.",
+      "tests": ["cnn_uvm_register_access_test", "cnn_uvm_protocol_ral_test"],
+      "assertions": ["a_aw_stable_while_stalled", "a_w_stable_while_stalled", "a_b_stable_while_stalled", "a_ar_stable_while_stalled", "a_r_stable_while_stalled", "a_bresp_legal", "a_rresp_legal"],
+      "coverpoints": ["kind_x_address", "write_order_cp", "strobe_cp", "response_latency_cp", "write_response_stall_cp", "read_response_stall_cp", "error_response_cp"]
+    },
+    {
+      "id": "REQ-DMA-001",
+      "description": "Packed AXI-Stream transfers retain payload under backpressure and use legal TKEEP and TLAST encoding.",
+      "tests": ["cnn_uvm_smoke_test", "cnn_uvm_protocol_recovery_test"],
+      "assertions": ["a_payload_stable_while_stalled", "a_tkeep_is_contiguous_low", "a_tlast_requires_valid"],
+      "coverpoints": ["type_x_channels", "payload_cp", "backpressure_cp", "terminal_keep_cp"]
+    },
+    {
+      "id": "REQ-MODEL-001",
+      "description": "A staging model is structurally validated and atomically activated without damaging the active model on failure.",
+      "tests": ["cnn_uvm_smoke_test", "cnn_uvm_model_replacement_test"],
+      "assertions": ["a_status_known"],
+      "coverpoints": ["address_cp", "kind_x_recovery"]
+    },
+    {
+      "id": "REQ-PARAM-001",
+      "description": "Layer parameters become visible only after exact-length and CRC validation and recover after abort.",
+      "tests": ["cnn_uvm_parameter_crc_recovery_test", "cnn_uvm_starvation_abort_test"],
+      "assertions": ["a_tkeep_is_contiguous_low"],
+      "coverpoints": ["fault_cg", "kind_x_recovery"]
+    },
+    {
+      "id": "REQ-EXEC-001",
+      "description": "Compiler-generated networks containing one through eight mixed layers execute against the independent reference.",
+      "tests": ["cnn_uvm_compiler_reference_test"],
+      "assertions": ["a_status_known"],
+      "coverpoints": ["layer_count_cp", "kernel_x_stride", "kernel_x_channels", "profile_cp"]
+    },
+    {
+      "id": "REQ-NUM-001",
+      "description": "Activation, residual add/subtract, requantization, and saturation behavior match the integer model.",
+      "tests": ["cnn_uvm_compiler_reference_test"],
+      "assertions": ["a_payload_stable_while_stalled"],
+      "coverpoints": ["activation_cp", "residual_cp", "activation_x_residual", "profile_cp"]
+    },
+    {
+      "id": "REQ-TENSOR-001",
+      "description": "Observed RTL output is scattered to DDR and gathered as the next layer input with tensor identity preserved.",
+      "tests": ["cnn_uvm_closed_loop_ddr_test", "cnn_uvm_compiler_reference_test"],
+      "assertions": ["a_tlast_requires_valid"],
+      "coverpoints": ["layer_cp", "channels_cp", "padding_cp"]
+    },
+    {
+      "id": "REQ-RECOVERY-001",
+      "description": "Malformed, stale, reordered, starved, aborted, and reset-interrupted work recovers deterministically.",
+      "tests": ["cnn_uvm_protocol_recovery_test", "cnn_uvm_reset_recovery_test", "cnn_uvm_starvation_abort_test", "cnn_uvm_ordering_recovery_test"],
+      "assertions": ["a_reset_quiescent", "a_status_known"],
+      "coverpoints": ["kind_x_recovery", "error_cp"]
+    },
+    {
+      "id": "REQ-IRQ-001",
+      "description": "Completion and error interrupts latch, report their causes, and clear through W1C control.",
+      "tests": ["cnn_uvm_interrupt_test", "cnn_uvm_ordering_recovery_test"],
+      "assertions": ["a_status_known", "a_reset_quiescent"],
+      "coverpoints": ["irq_cp", "error_cp", "kind_x_recovery"]
+    },
+    {
+      "id": "REQ-RAL-001",
+      "description": "All software-visible registers obey reset, access, byte-enable, mirror, volatility, and invalid-address behavior.",
+      "tests": ["cnn_uvm_register_access_test", "cnn_uvm_protocol_ral_test"],
+      "assertions": ["a_bresp_legal", "a_rresp_legal"],
+      "coverpoints": ["kind_x_address", "strobe_cp", "response_cp"]
+    }
+  ]
+}

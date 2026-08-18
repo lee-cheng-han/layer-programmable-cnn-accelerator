@@ -177,7 +177,7 @@ module packed_dma_runtime_router (
         if (packet_type == DMA_PACKET_INPUT_TILE) begin
           packet_ready = activation_packet_ready;
         end else if (packet_type == DMA_PACKET_LAYER_WEIGHTS) begin
-          packet_ready = !parameter_config_valid_q || parameter_load_ready;
+          packet_ready = parameter_config_valid_q && parameter_load_ready;
         end else begin
           packet_ready = 1'b1;
         end

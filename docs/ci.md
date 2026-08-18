@@ -64,6 +64,7 @@ Default check:
 ```bash
 make regression
 make uvm-compile
+make uvm-signoff
 ```
 
 The UVM gate compiles the UVM 1.2 agents, RAL model, scoreboard, coverage,
@@ -71,6 +72,10 @@ tests, complete programmable DUT, and simulation snapshot. The local Vivado
 2026.1 flow also passes `make uvm-regression`; a self-hosted runner can promote
 that command to the CI gate once its XSim runtime is verified. The workflow
 uploads simulation logs as artifacts even on failure.
+
+The manual `run_uvm_coverage` option executes `make uvm-u5`, merges functional
+and code coverage with `xcrg`, and uploads `build/uvm_coverage/`. It requires a
+working simulator license on the self-hosted runner.
 
 ## Full FPGA Flow
 

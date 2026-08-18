@@ -241,11 +241,14 @@ module cnn_programmable_runtime_top #(
       parameter_config_weight_bytes_q <= '0;
       parameter_config_bias_bytes_q <= '0;
       parameter_config_crc32_q <= '0;
-    end else begin
-      parameter_config_valid_q <=
-        !clear && descriptor_valid &&
-        (descriptor_layer_id == 16'(parameter_layer_select));
+    end else if (clear) begin
+      parameter_config_valid_q <= 1'b0;
+    end else if (parameter_config_layer_id_q != parameter_layer_select) begin
+      parameter_config_valid_q <= 1'b0;
       parameter_config_layer_id_q <= parameter_layer_select;
+    end else if (descriptor_valid &&
+                 (descriptor_layer_id == 16'(parameter_layer_select))) begin
+      parameter_config_valid_q <= 1'b1;
       parameter_config_kernel_size_q <= descriptor_kernel_width[1:0];
       parameter_config_cin_q <= descriptor_input_channels[7:0];
       parameter_config_cout_q <= descriptor_output_channels[7:0];
