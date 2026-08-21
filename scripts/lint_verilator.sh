@@ -10,6 +10,7 @@ if ! command -v verilator >/dev/null 2>&1; then
 fi
 
 verilator --lint-only \
+ -Irtl/include \
  -Wall \
  -Wno-fatal \
  -Wno-BLKLOOPINIT \
@@ -74,6 +75,7 @@ verilator --lint-only \
  rtl/zynq/cnn_image2image_system_top.sv
 
 verilator --lint-only \
+ -Irtl/include \
  -Wall \
  -Wno-fatal \
  -Wno-BLKLOOPINIT \

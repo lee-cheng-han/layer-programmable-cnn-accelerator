@@ -8,7 +8,7 @@ VITIS ?= $(shell command -v vitis 2>/dev/null || printf '%s' '$(HOME)/Xilinx/202
 XSCT ?= $(shell command -v xsct 2>/dev/null || printf '%s' '$(HOME)/Xilinx/2026.1/Vitis/bin/xsct')
 BOOTGEN ?= $(shell command -v bootgen 2>/dev/null || printf '%s' '$(HOME)/Xilinx/2026.1/Vitis/bin/bootgen')
 
-.PHONY: xsim regression xsim-regression lint clean flow-report report-flow check-warnings docs-check preboard-proof
+.PHONY: xsim regression xsim-regression lint clean flow-report report-flow check-warnings docs-check preboard-proof abi-generate abi-check
 .PHONY: unit tile-test programmable-runtime-test programmable-system-test randomized-package-rtl-test uvm-compile uvm-smoke uvm-closed-loop uvm-compiler-reference uvm-randomized uvm-faults uvm-u4 uvm-signoff uvm-coverage uvm-u5 uvm-protocol-ral uvm-regression numeric-runtime-test descriptor-test parameter-bank-test programmable-engine-test packed-dma-test packed-dma-runtime-test packed-dma-writer-test model-test model-package-example golden-test synth-sweep synth-report
 .PHONY: top-impl top-report programmable-top-synth programmable-top-impl programmable-top-report baremetal-headers baremetal-runtime-test runtime-corpus-test vitis-app
 .PHONY: zybo-z7-project zybo-z7-bitstream zybo-z7-xsa full-zybo-z7-flow
@@ -109,7 +109,13 @@ packed-dma-runtime-test:
 packed-dma-writer-test:
 	bash scripts/run_packed_dma_writer_tb.sh
 
-model-test:
+abi-generate:
+	python3 scripts/generate_abi_constants.py
+
+abi-check:
+	python3 scripts/generate_abi_constants.py --check
+
+model-test: abi-check
 	python3 -m unittest discover -s tests -p 'test_*.py'
 
 model-package-example:

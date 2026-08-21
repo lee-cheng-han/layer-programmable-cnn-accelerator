@@ -8,6 +8,7 @@ python3 scripts/generate_randomized_rtl_fixture.py --output "$fixture_dir"
 rm -rf "$build_dir"
 
 verilator --binary --timing \
+  -Irtl/include \
   -Wno-fatal -Wno-WIDTHTRUNC -Wno-WIDTHEXPAND \
   -I"$fixture_dir" \
   --top-module tb_randomized_programmable_package_flow \

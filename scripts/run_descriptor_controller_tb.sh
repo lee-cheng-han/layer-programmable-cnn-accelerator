@@ -11,6 +11,7 @@ rm -rf "$build_dir"
 mkdir -p "$build_dir"
 
 verilator --binary --timing \
+ -Irtl/include \
  -Wall \
  -Wno-fatal \
  -Wno-BLKLOOPINIT \

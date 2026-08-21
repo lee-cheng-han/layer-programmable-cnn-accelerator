@@ -44,7 +44,7 @@ reads return `0xDEAD_BEEF` with `SLVERR`.
 | `0x0A0` | `PERF_INPUT_STALLS` | RO | Input valid without ready cycles |
 | `0x0A4` | `PERF_OUTPUT_WORDS` | RO | Accepted output AXI-Stream words |
 | `0x0A8` | `PERF_OUTPUT_STALLS` | RO | Output valid without ready cycles |
-| `0x0FC` | `VERSION` | RO | Register-map version, currently `0x00040000` |
+| `0x0FC` | `VERSION` | RO | Register-map version, currently `0x00050001` |
 | `0x100`-`0x17C` | `CAPABILITY_*` | RO | Versioned 128-byte capability record |
 | `0x180`-`0x1BC` | `ERROR_RECORD_*` | RO | Sticky 64-byte structured-error record |
 

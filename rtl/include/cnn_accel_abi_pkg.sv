@@ -2,39 +2,7 @@
 `timescale 1ns/1ps
 
 package cnn_accel_abi_pkg;
-  localparam int unsigned ABI_VERSION = 1;
-  localparam logic [31:0] MODEL_MAGIC = 32'h314E_4E43;
-  localparam int unsigned MODEL_HEADER_BYTES = 128;
-  localparam int unsigned LAYER_DESCRIPTOR_BYTES = 128;
-  localparam int unsigned TENSOR_DESCRIPTOR_BYTES = 64;
-  localparam int unsigned QUANT_DESCRIPTOR_BYTES = 192;
-  localparam int unsigned CAPABILITY_RECORD_BYTES = 128;
-  localparam int unsigned ERROR_RECORD_BYTES = 64;
-  localparam int unsigned RECORD_ALIGNMENT_BYTES = 64;
-  localparam logic [15:0] NO_TENSOR_ID = 16'hFFFF;
-
-  localparam int unsigned MAX_LAYERS = 8;
-  localparam int unsigned MAX_TENSORS = 32;
-  localparam int unsigned MAX_QUANTIZATIONS = 32;
-  localparam int unsigned MAX_CHANNELS = 16;
-  localparam int unsigned MAX_TENSOR_WIDTH = 1024;
-  localparam int unsigned MAX_TENSOR_HEIGHT = 1024;
-  localparam int unsigned MAX_LAYER_WEIGHT_BYTES = 2304;
-  localparam int unsigned MAX_LAYER_BIAS_BYTES = 64;
-  localparam int unsigned WEIGHT_BANK_CAPACITY_BYTES = 4096;
-  localparam int unsigned POSTPROCESS_BANK_CAPACITY_BYTES = 256;
-  localparam int unsigned BIAS_BANK_CAPACITY_BYTES = POSTPROCESS_BANK_CAPACITY_BYTES;
-  localparam int unsigned POSTPROCESS_ENTRY_BYTES = 16;
-
-  localparam logic [31:0] FEATURE_CAPABILITY_QUERY = 32'h0000_0001;
-  localparam logic [31:0] FEATURE_STRUCTURED_ERRORS = 32'h0000_0002;
-  localparam logic [31:0] FEATURE_MODEL_PACKAGES = 32'h0000_0004;
-  localparam logic [31:0] FEATURE_RUNTIME_METADATA = 32'h0000_0008;
-  localparam logic [31:0] FEATURE_PACKED_DMA = 32'h0000_0010;
-  localparam logic [31:0] FEATURE_DDR_TILING = 32'h0000_0020;
-  localparam logic [31:0] FEATURE_AUTONOMOUS_FETCH = 32'h0000_0040;
-  localparam logic [31:0] FEATURE_INTERRUPTS = 32'h0000_0080;
-  localparam logic [31:0] FEATURE_FIXED_NETWORK = 32'h8000_0000;
+  `include "cnn_accel_abi_constants.svh"
 
   typedef enum logic [31:0] {
     ERROR_NONE = 32'h0000_0000,

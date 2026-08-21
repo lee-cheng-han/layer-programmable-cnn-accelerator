@@ -2,51 +2,10 @@
 #define CNN_ACCEL_ABI_H
 
 #include <stdint.h>
+#include "cnn_accel_abi_constants.h"
 
 /* Frozen V1 model-package ABI. Records are serialized explicitly; do not cast
  * untrusted package memory to native C structs. */
-#define CNN_ABI_VERSION                    1u
-#define CNN_MODEL_MAGIC                    0x314E4E43u
-#define CNN_MODEL_HEADER_SIZE              128u
-#define CNN_LAYER_DESCRIPTOR_SIZE          128u
-#define CNN_TENSOR_DESCRIPTOR_SIZE          64u
-#define CNN_QUANT_DESCRIPTOR_SIZE          192u
-#define CNN_CAPABILITY_RECORD_SIZE         128u
-#define CNN_ERROR_RECORD_SIZE               64u
-#define CNN_ABI_RECORD_ALIGNMENT            64u
-#define CNN_NO_TENSOR_ID                 0xFFFFu
-#define CNN_REGISTER_MAP_VERSION      0x00050001u
-
-/* Programmable runtime register map. */
-#define CNN_REG_CONTROL                    0x000u
-#define CNN_REG_STATUS                     0x004u
-#define CNN_REG_IRQ_STATUS                 0x008u
-#define CNN_REG_IRQ_ENABLE                 0x00Cu
-#define CNN_REG_JOB_ID                     0x010u
-#define CNN_REG_PARAMETER_LAYER            0x014u
-#define CNN_REG_MODEL_COMMAND              0x018u
-#define CNN_REG_MODEL_STATUS               0x01Cu
-#define CNN_REG_ACTIVE_MODEL_ID            0x020u
-#define CNN_REG_ACTIVE_GENERATION          0x024u
-#define CNN_REG_ACTIVE_LAYER_COUNT         0x028u
-#define CNN_REG_METADATA_ADDRESS           0x02Cu
-#define CNN_REG_METADATA_DATA              0x030u
-#define CNN_REG_METADATA_COMMIT            0x034u
-#define CNN_REG_MODEL_ERROR                0x038u
-#define CNN_REG_RUNTIME_ERROR              0x03Cu
-#define CNN_REG_ACTIVE_TENSORS             0x040u
-#define CNN_REG_CURRENT_TILE               0x044u
-#define CNN_REG_COMPLETED_LAYERS            0x048u
-#define CNN_REG_COMPLETED_TILES             0x04Cu
-#define CNN_REG_PACKET_ERRORS               0x050u
-#define CNN_REG_PARAMETER_BANKS             0x054u
-#define CNN_REG_INPUT_DDR_LO                0x058u
-#define CNN_REG_INPUT_DDR_HI                0x05Cu
-#define CNN_REG_OUTPUT_DDR_LO               0x060u
-#define CNN_REG_OUTPUT_DDR_HI               0x064u
-#define CNN_REG_SATURATION_EVENTS           0x068u
-#define CNN_REG_VERSION                     0x0FCu
-
 #define CNN_CONTROL_START                   (1u << 0)
 #define CNN_CONTROL_CLEAR                   (1u << 1)
 #define CNN_STATUS_BUSY                     (1u << 0)
@@ -60,29 +19,6 @@
 #define CNN_STATUS_PARAMETER_BANK_MASK      (3u << CNN_STATUS_PARAMETER_BANK_SHIFT)
 #define CNN_IRQ_DONE                        (1u << 0)
 #define CNN_IRQ_ERROR                       (1u << 1)
-
-#define CNN_MAX_LAYERS                       8u
-#define CNN_MAX_TENSORS                     32u
-#define CNN_MAX_QUANTIZATIONS               32u
-#define CNN_MAX_CHANNELS                    16u
-#define CNN_MAX_TENSOR_WIDTH              1024u
-#define CNN_MAX_TENSOR_HEIGHT             1024u
-#define CNN_MAX_LAYER_WEIGHT_BYTES        2304u
-#define CNN_MAX_LAYER_BIAS_BYTES            64u
-#define CNN_WEIGHT_BANK_CAPACITY_BYTES    4096u
-#define CNN_POSTPROCESS_BANK_CAPACITY_BYTES 256u
-#define CNN_BIAS_BANK_CAPACITY_BYTES CNN_POSTPROCESS_BANK_CAPACITY_BYTES
-#define CNN_POSTPROCESS_ENTRY_SIZE          16u
-
-#define CNN_FEATURE_CAPABILITY_QUERY   (1u << 0)
-#define CNN_FEATURE_STRUCTURED_ERRORS  (1u << 1)
-#define CNN_FEATURE_MODEL_PACKAGES     (1u << 2)
-#define CNN_FEATURE_RUNTIME_METADATA   (1u << 3)
-#define CNN_FEATURE_PACKED_DMA         (1u << 4)
-#define CNN_FEATURE_DDR_TILING         (1u << 5)
-#define CNN_FEATURE_AUTONOMOUS_FETCH   (1u << 6)
-#define CNN_FEATURE_INTERRUPTS         (1u << 7)
-#define CNN_FEATURE_FIXED_NETWORK      (1u << 31)
 
 #define CNN_MODEL_COMMAND_BEGIN_LOAD   (1u << 0)
 #define CNN_MODEL_COMMAND_FINISH_LOAD  (1u << 1)

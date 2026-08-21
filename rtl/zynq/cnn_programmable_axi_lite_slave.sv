@@ -67,34 +67,36 @@ module cnn_programmable_axi_lite_slave #(
   input  logic [31:0] packet_error_count,
   input  logic [1:0] parameter_bank_valid
 );
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_CONTROL = 12'h000;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_STATUS = 12'h004;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_IRQ_STATUS = 12'h008;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_IRQ_ENABLE = 12'h00C;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_JOB_ID = 12'h010;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_PARAMETER_LAYER = 12'h014;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_MODEL_COMMAND = 12'h018;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_MODEL_STATUS = 12'h01C;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_ACTIVE_MODEL_ID = 12'h020;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_ACTIVE_GENERATION = 12'h024;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_ACTIVE_LAYER_COUNT = 12'h028;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_METADATA_ADDRESS = 12'h02C;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_METADATA_DATA = 12'h030;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_METADATA_COMMIT = 12'h034;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_MODEL_ERROR = 12'h038;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_RUNTIME_ERROR = 12'h03C;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_ACTIVE_TENSORS = 12'h040;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_CURRENT_TILE = 12'h044;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_COMPLETED_LAYERS = 12'h048;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_COMPLETED_TILES = 12'h04C;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_PACKET_ERRORS = 12'h050;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_PARAMETER_BANKS = 12'h054;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_INPUT_DDR_LO = 12'h058;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_INPUT_DDR_HI = 12'h05C;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_OUTPUT_DDR_LO = 12'h060;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_OUTPUT_DDR_HI = 12'h064;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_SATURATION_EVENTS = 12'h068;
-  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_VERSION = 12'h0FC;
+  import cnn_accel_abi_pkg::*;
+
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_CONTROL = REG_CONTROL;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_STATUS = REG_STATUS;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_IRQ_STATUS = REG_IRQ_STATUS;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_IRQ_ENABLE = REG_IRQ_ENABLE;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_JOB_ID = REG_JOB_ID;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_PARAMETER_LAYER = REG_PARAMETER_LAYER;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_MODEL_COMMAND = REG_MODEL_COMMAND;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_MODEL_STATUS = REG_MODEL_STATUS;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_ACTIVE_MODEL_ID = REG_ACTIVE_MODEL_ID;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_ACTIVE_GENERATION = REG_ACTIVE_GENERATION;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_ACTIVE_LAYER_COUNT = REG_ACTIVE_LAYER_COUNT;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_METADATA_ADDRESS = REG_METADATA_ADDRESS;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_METADATA_DATA = REG_METADATA_DATA;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_METADATA_COMMIT = REG_METADATA_COMMIT;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_MODEL_ERROR = REG_MODEL_ERROR;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_RUNTIME_ERROR = REG_RUNTIME_ERROR;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_ACTIVE_TENSORS = REG_ACTIVE_TENSORS;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_CURRENT_TILE = REG_CURRENT_TILE;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_COMPLETED_LAYERS = REG_COMPLETED_LAYERS;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_COMPLETED_TILES = REG_COMPLETED_TILES;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_PACKET_ERRORS = REG_PACKET_ERRORS;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_PARAMETER_BANKS = REG_PARAMETER_BANKS;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_INPUT_DDR_LO = REG_INPUT_DDR_LO;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_INPUT_DDR_HI = REG_INPUT_DDR_HI;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_OUTPUT_DDR_LO = REG_OUTPUT_DDR_LO;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_OUTPUT_DDR_HI = REG_OUTPUT_DDR_HI;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_SATURATION_EVENTS = REG_SATURATION_EVENTS;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_VERSION = REG_VERSION;
 
   localparam logic [1:0] AXI_RESP_OKAY = 2'b00;
   localparam logic [1:0] AXI_RESP_SLVERR = 2'b10;
@@ -301,7 +303,7 @@ module cnn_programmable_axi_lite_slave #(
           ADDR_OUTPUT_DDR_LO: s_axi_rdata <= active_output_ddr_offset[31:0];
           ADDR_OUTPUT_DDR_HI: s_axi_rdata <= active_output_ddr_offset[63:32];
           ADDR_SATURATION_EVENTS: s_axi_rdata <= saturation_event_count;
-          ADDR_VERSION: s_axi_rdata <= 32'h0005_0001;
+          ADDR_VERSION: s_axi_rdata <= REGISTER_MAP_VERSION;
           default: begin
             s_axi_rdata <= 32'hDEAD_BEEF;
             s_axi_rresp <= AXI_RESP_SLVERR;

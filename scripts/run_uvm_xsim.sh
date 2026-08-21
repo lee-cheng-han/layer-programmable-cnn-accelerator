@@ -103,6 +103,7 @@ for index in "${!sources[@]}"; do
 done
 
 "$xvlog_bin" --sv --uvm_version 1.2 -L uvm \
+  --include "$repo_root/rtl/include" \
   --include "$repo_root/verification/uvm" \
   --include "$build_dir/uvm_fixture" \
   --include "$xilinx_root/data/xsim/system_verilog/uvm_include" \

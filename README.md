@@ -230,7 +230,7 @@ Source evidence:
 | `0x024` | `PACKET_WORDS` | Accepted words in the active packet |
 | `0x028`-`0x054` | `MODEL_*`, `METADATA_*` | Metadata loading, validation, atomic activation, and model identity |
 | `0x080`-`0x0A8` | `PERF_*` | Job, layer, transfer, overlap, and stall counters |
-| `0x0FC` | `VERSION` | Interface version (`0x00040000`) |
+| `0x0FC` | `VERSION` | Interface version (`0x00050001`) |
 | `0x100`-`0x17C` | `CAPABILITY_*` | Versioned implementation capability record |
 | `0x180`-`0x1BC` | `ERROR_RECORD_*` | Sticky structured failure context |
 

@@ -1,5 +1,11 @@
 # V1 Model Package ABI
 
+The normative constants, record capacities, feature bits, and programmable
+register addresses are defined in `abi/cnn_accel_v1.json`. Run `make
+abi-generate` after an intentional schema change. `make abi-check` verifies
+that the generated Python, C, and SystemVerilog bindings are byte-for-byte
+current and is enforced by CI.
+
 ## Status and Scope
 
 This document is the normative binary contract for the layer-programmable V1

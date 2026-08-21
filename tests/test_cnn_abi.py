@@ -176,8 +176,8 @@ class TestCnnAbi(unittest.TestCase):
 
     def test_c_and_systemverilog_constants_match_python(self):
         root = Path(__file__).resolve().parents[1]
-        c_header = (root / "software/zynq_baremetal/cnn_accel_abi.h").read_text()
-        sv_package = (root / "rtl/include/cnn_accel_abi_pkg.sv").read_text()
+        c_header = (root / "software/zynq_baremetal/cnn_accel_abi_constants.h").read_text()
+        sv_package = (root / "rtl/include/cnn_accel_abi_constants.svh").read_text()
         expected = {
             "ABI_VERSION": ABI_VERSION,
             "MODEL_HEADER_SIZE": MODEL_HEADER_SIZE,
@@ -206,8 +206,18 @@ class TestCnnAbi(unittest.TestCase):
             "ERROR_RECORD_SIZE": "ERROR_RECORD_BYTES",
         }
         for key, value in expected.items():
-            self.assertRegex(c_header, rf"#define\s+{c_names[key]}\s+{value}u")
+            self.assertRegex(
+                c_header,
+                rf"#define\s+{c_names[key]}\s+0x{value:08X}u",
+            )
             self.assertRegex(sv_package, rf"{sv_names[key]}\s*=\s*{value};")
+
+    def test_generated_register_map_version_is_consistent(self):
+        root = Path(__file__).resolve().parents[1]
+        c_header = (root / "software/zynq_baremetal/cnn_accel_abi_constants.h").read_text()
+        sv_package = (root / "rtl/include/cnn_accel_abi_constants.svh").read_text()
+        self.assertIn(f"0x{REGISTER_MAP_VERSION:08X}u", c_header)
+        self.assertIn(f"32'h{REGISTER_MAP_VERSION:08X}", sv_package)
 
     def test_complete_valid_model(self):
         validate_model(*valid_model())

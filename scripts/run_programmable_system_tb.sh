@@ -5,6 +5,7 @@ build_dir="${TMPDIR:-/tmp}/cnn_programmable_system_tb"
 rm -rf "$build_dir"
 
 verilator --binary --timing \
+  -Irtl/include \
   -Wno-fatal -Wno-WIDTHTRUNC -Wno-WIDTHEXPAND \
   --top-module tb_programmable_system_top \
   rtl/include/cnn_accel_abi_pkg.sv \
