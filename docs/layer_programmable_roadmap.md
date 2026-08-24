@@ -15,7 +15,7 @@ atomically activated, and reused across multiple images.
 | 0 | Preserve fixed-network board baseline and evidence | Complete; physical board validation pending |
 | 1 | Freeze exact V1 model-package ABI | Complete; per-channel numeric contract frozen |
 | 2 | Build model compiler and package-level bit-accurate executor | Complete |
-| 3 | Add capability discovery and structured errors | Baseline complete; programmable-stage propagation remains |
+| 3 | Add capability discovery and structured errors | Programmable first-fault snapshot integrated; exact validator field/range propagation remains |
 | 4 | Add runtime metadata memories and atomic model lifecycle | Complete |
 | 5 | Generalize descriptor-driven layer execution control | Complete |
 | 6 | Add reusable active/prefetch parameter banks | Complete |
@@ -117,7 +117,7 @@ documented interface or an isolated module.
 |---:|---|---|---|
 | 1 | Close actual RTL tensor chaining | Implemented | The UVM DDR model scatters observed RTL output packets into strided tensor memory and gathers that memory for the next layer; the two-layer test injects no intermediate golden tensor |
 | 2 | Complete UVM verification and coverage closure | U4 complete; U5 functional target closed | Preserve the 96.72% functional result, obtain fresh code reports from a stable tool flow, review scoped exclusions, measure assertion coverage, and meet every remaining target |
-| 3 | Improve structured error propagation | Partial | First-failure records identify subsystem, model generation, layer, tensor, tile, packet field, observed value, and expected range for every programmable-runtime failure |
+| 3 | Improve structured error propagation | First-fault aperture and firmware decode complete; internal detail partial | First-failure records identify subsystem, model generation, layer, tensor, tile, packet field, observed value, and expected range for every programmable-runtime failure |
 | 4 | Complete runtime observability | Partial | Per-layer and per-job cycles, MAC-active cycles, input starvation, output backpressure, parameter stalls, bytes, MACs, and saturation events are software-visible and tested |
 | 5 | Expand measurable verification coverage | Baseline complete | CI records coverage across 1-8 layers, both kernels, both strides, all activations and residual modes, asymmetric boundaries, channel tails, partial beats, clipping, and multiple deterministic seeds |
 | 6 | Complete memory and recovery fault campaign | Partial | Tests cover corrupted parameters, stale tensor IDs, packet reordering, aborted jobs, DMA timeout, active-model replacement, and successful rerun without reset |

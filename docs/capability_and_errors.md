@@ -124,11 +124,15 @@ model_id         = package model ID
 generation_id    = package generation
 ```
 
-The current fixed packet router predates structured context. The system wrapper
+The fixed packet router predates structured context. Its system wrapper
 therefore records `DATA_PLANE_PROTOCOL`, packet kind/index, accepted packet
 words as the observed value, and the legacy 8-bit router code in `detail`.
-Future package validators and runtime controllers will drive exact fields and
-ranges through the same snapshot interface.
+
+The programmable system now maps the same record at `0x180` and captures the
+first lifecycle or runtime fault with active model generation, layer or tensor
+context, tile coordinates, stage, subsystem kind, and observed low-level error
+code. Firmware decodes and prints the record. Exact field/range propagation
+from every internal validator remains the next diagnostic refinement.
 
 ## Software Validation
 

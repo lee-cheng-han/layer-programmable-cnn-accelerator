@@ -32,6 +32,7 @@ module cnn_structured_error_snapshot (
   logic [31:0] model_id_q;
   logic [31:0] model_generation_id_q;
   logic [31:0] detail_q;
+  logic valid_q;
 
   always_ff @(posedge clk or negedge resetn) begin
     if (!resetn) begin
@@ -46,6 +47,7 @@ module cnn_structured_error_snapshot (
       model_id_q <= '0;
       model_generation_id_q <= '0;
       detail_q <= '0;
+      valid_q <= 1'b0;
     end else if (clear) begin
       error_code_q <= ERROR_NONE;
       error_stage_q <= ERROR_STAGE_NONE;
@@ -58,7 +60,8 @@ module cnn_structured_error_snapshot (
       model_id_q <= '0;
       model_generation_id_q <= '0;
       detail_q <= '0;
-    end else if (capture) begin
+      valid_q <= 1'b0;
+    end else if (capture && !valid_q) begin
       error_code_q <= error_code;
       error_stage_q <= error_stage;
       record_kind_q <= record_kind;
@@ -70,6 +73,7 @@ module cnn_structured_error_snapshot (
       model_id_q <= model_id;
       model_generation_id_q <= model_generation_id;
       detail_q <= detail;
+      valid_q <= 1'b1;
     end
   end
 

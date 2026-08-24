@@ -53,6 +53,7 @@
     "OUTPUT_DDR_LO": 96,
     "OUTPUT_DDR_HI": 100,
     "SATURATION_EVENTS": 104,
+    "STRUCTURED_ERROR_BASE": 384,
     "VERSION": 252
   },
   "features": {

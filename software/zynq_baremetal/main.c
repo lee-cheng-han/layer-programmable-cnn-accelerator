@@ -49,6 +49,29 @@ static inline uint32_t cnn_read(uint32_t offset)
     return Xil_In32(CNN_BASE + offset);
 }
 
+static void print_structured_error(void)
+{
+    uint8_t bytes[CNN_ERROR_RECORD_SIZE];
+    struct cnn_error_record_view record;
+
+    for (uint32_t word = 0; word < CNN_ERROR_RECORD_SIZE / 4U; ++word) {
+        uint32_t value = cnn_read(CNN_REG_STRUCTURED_ERROR_BASE + word * 4U);
+        bytes[word * 4U] = (uint8_t)value;
+        bytes[word * 4U + 1U] = (uint8_t)(value >> 8);
+        bytes[word * 4U + 2U] = (uint8_t)(value >> 16);
+        bytes[word * 4U + 3U] = (uint8_t)(value >> 24);
+    }
+    if (cnn_error_record_decode(bytes, sizeof(bytes), &record) != CNN_RUNTIME_OK)
+        return;
+    xil_printf(" error code=0x%08x stage=%u kind=%u index=%u field=%u\r\n",
+               record.error_code, record.stage, record.record_kind,
+               record.record_index, record.field_id);
+    xil_printf(" error model=%u generation=%u observed=0x%08x%08x detail=0x%08x\r\n",
+               record.model_id, record.generation_id,
+               (uint32_t)(record.observed_value >> 32),
+               (uint32_t)record.observed_value, record.detail);
+}
+
 static inline void dma_write(uint32_t offset, uint32_t value)
 {
     Xil_Out32(DMA_BASE + offset, value);
@@ -244,6 +267,7 @@ static int wait_for_layer(uint16_t layer_index)
         if ((status & CNN_STATUS_ERROR) != 0U) {
             xil_printf("[FAIL] runtime error=0x%08x\r\n",
                        cnn_read(CNN_REG_RUNTIME_ERROR));
+            print_structured_error();
             return -1;
         }
         if ((status & CNN_STATUS_BUSY) != 0U && active == layer_index)

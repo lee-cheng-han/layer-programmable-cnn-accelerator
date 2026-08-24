@@ -436,6 +436,34 @@ int cnn_dma_packet_parse(const void *source_data, size_t size,
     return CNN_RUNTIME_OK;
 }
 
+int cnn_error_record_decode(const void *source_data, size_t size,
+                            struct cnn_error_record_view *record)
+{
+    const uint8_t *source = (const uint8_t *)source_data;
+    uint32_t context;
+    uint32_t index_field;
+
+    if (source == NULL || record == NULL || size < CNN_ERROR_RECORD_SIZE)
+        return CNN_RUNTIME_BAD_ARGUMENT;
+    if (!record_header_valid(source, CNN_ERROR_RECORD_SIZE))
+        return CNN_RUNTIME_BAD_PACKAGE;
+    context = read_u32(source + CNN_ERR_CONTEXT_OFS);
+    index_field = read_u32(source + CNN_ERR_RECORD_INDEX_OFS);
+    memset(record, 0, sizeof(*record));
+    record->error_code = read_u32(source + CNN_ERR_CODE_OFS);
+    record->stage = (uint8_t)context;
+    record->record_kind = (uint8_t)(context >> 8);
+    record->record_index = (uint16_t)index_field;
+    record->field_id = (uint16_t)(index_field >> 16);
+    record->observed_value = read_u64(source + CNN_ERR_OBSERVED_OFS);
+    record->expected_min = read_u64(source + CNN_ERR_EXPECTED_MIN_OFS);
+    record->expected_max = read_u64(source + CNN_ERR_EXPECTED_MAX_OFS);
+    record->model_id = read_u32(source + CNN_ERR_MODEL_ID_OFS);
+    record->generation_id = read_u32(source + CNN_ERR_MODEL_ID_OFS + 4);
+    record->detail = read_u32(source + CNN_ERR_DETAIL_OFS);
+    return CNN_RUNTIME_OK;
+}
+
 static int tile_copy(const struct cnn_tensor_view *tensor, uint8_t *workspace,
                      const struct cnn_tile *tile, uint8_t *packed,
                      size_t packed_size, int gather)

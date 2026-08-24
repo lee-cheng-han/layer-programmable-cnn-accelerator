@@ -50,6 +50,7 @@ localparam logic [11:0] REG_INPUT_DDR_HI = 12'h05C;
 localparam logic [11:0] REG_OUTPUT_DDR_LO = 12'h060;
 localparam logic [11:0] REG_OUTPUT_DDR_HI = 12'h064;
 localparam logic [11:0] REG_SATURATION_EVENTS = 12'h068;
+localparam logic [11:0] REG_STRUCTURED_ERROR_BASE = 12'h180;
 localparam logic [11:0] REG_VERSION = 12'h0FC;
 
 localparam logic [31:0] FEATURE_CAPABILITY_QUERY = 32'h00000001;

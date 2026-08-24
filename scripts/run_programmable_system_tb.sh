@@ -40,6 +40,7 @@ verilator --binary --timing \
   rtl/runtime/cnn_tiled_multi_layer_controller.sv \
   rtl/runtime/cnn_programmable_runtime_top.sv \
   rtl/zynq/cnn_programmable_axi_lite_slave.sv \
+  rtl/zynq/cnn_structured_error_snapshot.sv \
   rtl/zynq/cnn_programmable_system_top.sv \
   tb/tb_programmable_system_top.sv \
   -Mdir "$build_dir"

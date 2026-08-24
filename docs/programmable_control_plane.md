@@ -40,10 +40,20 @@ little-endian, and naturally aligned.
 | `0x060`-`0x064` | `OUTPUT_DDR` | R | active output tensor DDR offset |
 | `0x068` | `SATURATION_EVENTS` | R | requantization and residual INT8 clipping events in the active job |
 | `0x0FC` | `VERSION` | R | `0x00050001` |
+| `0x180`-`0x1BC` | `STRUCTURED_ERROR` | R | sticky 64-byte first-fault record |
 
 `METADATA_ADDRESS` uses bits `[1:0]` for record kind, `[7:2]` for record
 index, and `[13:8]` for word index. This matches the existing metadata-store
 aperture.
+
+The structured-error aperture uses the V1 `ErrorRecord` wire layout. The first
+rising lifecycle or runtime failure captures stage, subsystem record kind,
+layer or tensor context, active model ID and generation, observed error code,
+and tile coordinates. Later failures cannot overwrite it. `CONTROL.clear`
+clears the runtime and the snapshot together while preserving the active model.
+The bare-metal runtime decodes this record with
+`cnn_error_record_decode()`, and the board application prints it after a
+runtime failure.
 
 ## AXI-Stream Boundary
 
@@ -63,7 +73,9 @@ service and acknowledge each source independently.
 over AXI-Lite, loads a CRC-checked weight packet over AXI-Stream, starts the
 job through `CONTROL`, sends two input tiles, checks packed output packets, and
 reads model identity, tensor context, tile coordinates, DDR offsets, packet
-errors, and completion counters back through AXI-Lite.
+errors, and completion counters back through AXI-Lite. Its malformed-packet
+scenario also checks the complete first-fault header, stage, record kind,
+model identity, generation, and clear behavior.
 
 Run:
 

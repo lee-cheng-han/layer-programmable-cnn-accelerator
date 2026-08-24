@@ -95,6 +95,20 @@ struct cnn_dma_packet {
     const uint8_t *payload;
 };
 
+struct cnn_error_record_view {
+    uint32_t error_code;
+    uint8_t stage;
+    uint8_t record_kind;
+    uint16_t record_index;
+    uint16_t field_id;
+    uint64_t observed_value;
+    uint64_t expected_min;
+    uint64_t expected_max;
+    uint32_t model_id;
+    uint32_t generation_id;
+    uint32_t detail;
+};
+
 uint32_t cnn_runtime_crc32(const void *data, size_t size, uint32_t seed);
 int cnn_model_open(struct cnn_model_view *model, const void *package,
                    size_t package_size);
@@ -117,6 +131,8 @@ int cnn_dma_packet_build(uint8_t *destination, size_t capacity,
                          const struct cnn_dma_packet *packet);
 int cnn_dma_packet_parse(const void *source, size_t size,
                          struct cnn_dma_packet *packet);
+int cnn_error_record_decode(const void *source, size_t size,
+                            struct cnn_error_record_view *record);
 int cnn_tensor_gather_tile(const struct cnn_tensor_view *tensor,
                            const uint8_t *workspace,
                            const struct cnn_tile *tile, uint8_t *destination,

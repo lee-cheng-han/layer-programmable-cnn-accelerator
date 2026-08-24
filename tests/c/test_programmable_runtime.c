@@ -52,6 +52,36 @@ int main(int argc, char **argv)
     int payload_size;
     int packet_size;
 
+    {
+        uint8_t encoded_error[CNN_ERROR_RECORD_SIZE] = {0};
+        struct cnn_error_record_view decoded_error;
+        encoded_error[0] = CNN_ABI_VERSION;
+        encoded_error[2] = CNN_ERROR_RECORD_SIZE;
+        encoded_error[CNN_ERR_CODE_OFS] = 0x00;
+        encoded_error[CNN_ERR_CODE_OFS + 1] = 0x04;
+        encoded_error[CNN_ERR_CONTEXT_OFS] = CNN_ERROR_STAGE_DATA_PLANE;
+        encoded_error[CNN_ERR_CONTEXT_OFS + 1] = CNN_ERROR_RECORD_PACKET;
+        encoded_error[CNN_ERR_RECORD_INDEX_OFS] = 7;
+        encoded_error[CNN_ERR_RECORD_INDEX_OFS + 2] =
+            CNN_ERROR_FIELD_PAYLOAD_LENGTH;
+        encoded_error[CNN_ERR_OBSERVED_OFS] = 9;
+        encoded_error[CNN_ERR_EXPECTED_MAX_OFS] = 8;
+        encoded_error[CNN_ERR_MODEL_ID_OFS] = 0xF5;
+        encoded_error[CNN_ERR_MODEL_ID_OFS + 1] = 0x01;
+        encoded_error[CNN_ERR_MODEL_ID_OFS + 4] = 12;
+        CHECK(cnn_error_record_decode(encoded_error, sizeof(encoded_error),
+                                      &decoded_error) == CNN_RUNTIME_OK);
+        CHECK(decoded_error.error_code == CNN_ERROR_DATA_PLANE_PROTOCOL);
+        CHECK(decoded_error.stage == CNN_ERROR_STAGE_DATA_PLANE);
+        CHECK(decoded_error.record_kind == CNN_ERROR_RECORD_PACKET);
+        CHECK(decoded_error.record_index == 7);
+        CHECK(decoded_error.field_id == CNN_ERROR_FIELD_PAYLOAD_LENGTH);
+        CHECK(decoded_error.observed_value == 9);
+        CHECK(decoded_error.expected_max == 8);
+        CHECK(decoded_error.model_id == 501 &&
+              decoded_error.generation_id == 12);
+    }
+
     CHECK(argc == 2);
     package = read_file(argv[1], &package_size);
     CHECK(package != NULL);

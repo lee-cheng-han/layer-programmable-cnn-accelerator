@@ -81,9 +81,53 @@ module cnn_programmable_system_top #(
   logic [31:0] saturation_event_count;
   logic layer_done;
   logic [7:0] error_code;
+  logic [1:0] error_source;
   logic [2:0] error_layer;
   logic [31:0] packet_error_count;
   logic [1:0] parameter_bank_valid;
+  logic [4:0] structured_error_word_index;
+  logic [31:0] structured_error_word_data;
+  logic error_q;
+  logic [7:0] model_lifecycle_error_q;
+  logic structured_error_capture;
+  logic [31:0] structured_error_code;
+  logic [7:0] structured_error_stage;
+  logic [7:0] structured_error_kind;
+  logic [15:0] structured_error_index;
+
+  import cnn_accel_abi_pkg::*;
+
+  assign structured_error_capture =
+    (error && !error_q) ||
+    ((model_lifecycle_error != MODEL_LIFECYCLE_OK) &&
+     (model_lifecycle_error_q == MODEL_LIFECYCLE_OK));
+  assign structured_error_code =
+    (model_lifecycle_error != MODEL_LIFECYCLE_OK) ?
+      ERROR_MODEL_LIFECYCLE_FAILED :
+      ((error_source == 2'd0) ? ERROR_EXECUTION_FAILED :
+       ((error_source == 2'd2) ? ERROR_PARAMETER_VALIDATION_FAILED :
+        ERROR_DATA_PLANE_PROTOCOL));
+  assign structured_error_stage =
+    (model_lifecycle_error != MODEL_LIFECYCLE_OK) ?
+      ERROR_STAGE_PACKAGE_VALIDATE :
+      ((error_source == 2'd1) ? ERROR_STAGE_DATA_PLANE : ERROR_STAGE_EXECUTE);
+  assign structured_error_kind =
+    (model_lifecycle_error != MODEL_LIFECYCLE_OK) ? ERROR_RECORD_MODEL :
+      ((error_source == 2'd1) ? ERROR_RECORD_PACKET : ERROR_RECORD_LAYER);
+  assign structured_error_index =
+    (structured_error_kind == ERROR_RECORD_LAYER) ? {13'd0, error_layer} :
+    (structured_error_kind == ERROR_RECORD_PACKET) ? active_input_tensor_id :
+    16'd0;
+
+  always_ff @(posedge aclk or negedge aresetn) begin
+    if (!aresetn) begin
+      error_q <= 1'b0;
+      model_lifecycle_error_q <= MODEL_LIFECYCLE_OK;
+    end else begin
+      error_q <= error;
+      model_lifecycle_error_q <= model_lifecycle_error;
+    end
+  end
 
   cnn_programmable_axi_lite_slave #(
     .AXI_ADDR_WIDTH(AXI_ADDR_WIDTH)
@@ -130,7 +174,28 @@ module cnn_programmable_system_top #(
     .core_error(error), .core_error_code(error_code),
     .core_error_layer(error_layer),
     .packet_error_count(packet_error_count),
-    .parameter_bank_valid(parameter_bank_valid)
+    .parameter_bank_valid(parameter_bank_valid),
+    .structured_error_word_index(structured_error_word_index),
+    .structured_error_word_data(structured_error_word_data)
+  );
+
+  cnn_structured_error_snapshot u_structured_error (
+    .clk(aclk), .resetn(aresetn), .clear(clear_pulse),
+    .capture(structured_error_capture),
+    .error_code(structured_error_code),
+    .error_stage(structured_error_stage),
+    .record_kind(structured_error_kind),
+    .record_index(structured_error_index),
+    .field_id(ERROR_FIELD_NONE),
+    .observed_value({56'd0,
+      (model_lifecycle_error != MODEL_LIFECYCLE_OK) ?
+        model_lifecycle_error : error_code}),
+    .expected_min(64'd0), .expected_max(64'd0),
+    .model_id(active_model_id),
+    .model_generation_id(active_generation_id),
+    .detail({current_tile_y, current_tile_x}),
+    .word_index(structured_error_word_index),
+    .word_data(structured_error_word_data)
   );
 
   cnn_programmable_runtime_top #(
@@ -175,7 +240,8 @@ module cnn_programmable_system_top #(
     .completed_tile_count(completed_tile_count),
     .saturation_event_count(saturation_event_count),
     .layer_done(layer_done), .busy(busy), .done(done), .error(error),
-    .error_code(error_code), .error_layer(error_layer),
+    .error_code(error_code), .error_source(error_source),
+    .error_layer(error_layer),
     .packet_error_count(packet_error_count),
     .parameter_bank_valid(parameter_bank_valid)
   );

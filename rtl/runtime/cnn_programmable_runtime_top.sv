@@ -68,6 +68,7 @@ module cnn_programmable_runtime_top #(
   output logic done,
   output logic error,
   output logic [7:0] error_code,
+  output logic [1:0] error_source,
   output logic [2:0] error_layer,
   output logic [31:0] packet_error_count,
   output logic [1:0] parameter_bank_valid
@@ -229,6 +230,9 @@ module cnn_programmable_runtime_top #(
                       (router_error ? {1'b1, router_error_code[6:0]} :
                        (parameter_error ? {2'b11, parameter_error_code[5:0]} :
                         parser_error_code));
+  assign error_source = controller_error ? 2'd0 :
+                        (router_error ? 2'd1 :
+                         (parameter_error ? 2'd2 : 2'd3));
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin

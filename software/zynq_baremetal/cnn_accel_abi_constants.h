@@ -53,6 +53,7 @@
 #define CNN_REG_OUTPUT_DDR_LO                       0x060u
 #define CNN_REG_OUTPUT_DDR_HI                       0x064u
 #define CNN_REG_SATURATION_EVENTS                   0x068u
+#define CNN_REG_STRUCTURED_ERROR_BASE               0x180u
 #define CNN_REG_VERSION                             0x0FCu
 
 #define CNN_FEATURE_CAPABILITY_QUERY                0x00000001u

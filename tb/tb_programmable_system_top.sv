@@ -23,6 +23,7 @@ module tb_programmable_system_top;
   localparam logic [11:0] ADDR_OUTPUT_DDR_LO = 12'h060;
   localparam logic [11:0] ADDR_SATURATION_EVENTS = 12'h068;
   localparam logic [11:0] ADDR_VERSION = 12'h0FC;
+  localparam logic [11:0] ADDR_STRUCTURED_ERROR = 12'h180;
 
   logic aclk = 1'b0;
   logic aresetn = 1'b0;
@@ -299,6 +300,19 @@ module tb_programmable_system_top;
     if (value != 1) $fatal(1, "malformed packet count mismatch");
     axi_read(ADDR_ACTIVE_MODEL_ID, value);
     if (value != 501) $fatal(1, "malformed packet corrupted active model");
+    axi_read(ADDR_STRUCTURED_ERROR, value);
+    if (value != 32'h0040_0001)
+      $fatal(1, "structured error header mismatch: %h", value);
+    axi_read(ADDR_STRUCTURED_ERROR + 12'h004, value);
+    if (value != 32'h0000_0302)
+      $fatal(1, "structured error code mismatch: %h", value);
+    axi_read(ADDR_STRUCTURED_ERROR + 12'h008, value);
+    if (value[15:0] != 16'h0204)
+      $fatal(1, "structured error context mismatch: %h", value);
+    axi_read(ADDR_STRUCTURED_ERROR + 12'h028, value);
+    if (value != 501) $fatal(1, "structured error model mismatch");
+    axi_read(ADDR_STRUCTURED_ERROR + 12'h02C, value);
+    if (value != 12) $fatal(1, "structured error generation mismatch");
     axi_write(ADDR_CONTROL, 32'd2);
     repeat (3) @(posedge aclk);
     axi_read(ADDR_STATUS, value);
@@ -306,6 +320,8 @@ module tb_programmable_system_top;
       $fatal(1, "runtime did not recover with active model preserved");
     axi_read(ADDR_PACKET_ERRORS, value);
     if (value != 0) $fatal(1, "packet error count did not clear");
+    axi_read(ADDR_STRUCTURED_ERROR + 12'h004, value);
+    if (value != 0) $fatal(1, "structured error did not clear");
 
     send_packet(DMA_PACKET_LAYER_WEIGHTS, 0, 0, 0, 0,
                 32'd1, 4'b0001, 1);
