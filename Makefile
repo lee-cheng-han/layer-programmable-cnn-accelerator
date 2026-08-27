@@ -9,7 +9,7 @@ XSCT ?= $(shell command -v xsct 2>/dev/null || printf '%s' '$(HOME)/Xilinx/2026.
 BOOTGEN ?= $(shell command -v bootgen 2>/dev/null || printf '%s' '$(HOME)/Xilinx/2026.1/Vitis/bin/bootgen')
 
 .PHONY: xsim regression xsim-regression lint clean flow-report report-flow check-warnings docs-check preboard-proof abi-generate abi-check
-.PHONY: unit tile-test programmable-runtime-test programmable-system-test randomized-package-rtl-test uvm-compile uvm-smoke uvm-closed-loop uvm-compiler-reference uvm-randomized uvm-faults uvm-u4 uvm-signoff uvm-coverage uvm-u5 uvm-protocol-ral uvm-regression numeric-runtime-test descriptor-test parameter-bank-test programmable-engine-test packed-dma-test packed-dma-runtime-test packed-dma-writer-test model-test model-package-example golden-test synth-sweep synth-report
+.PHONY: unit tile-test programmable-runtime-test programmable-performance-test programmable-system-test randomized-package-rtl-test uvm-compile uvm-smoke uvm-closed-loop uvm-compiler-reference uvm-randomized uvm-faults uvm-u4 uvm-signoff uvm-coverage uvm-u5 uvm-protocol-ral uvm-regression numeric-runtime-test descriptor-test parameter-bank-test programmable-engine-test packed-dma-test packed-dma-runtime-test packed-dma-writer-test model-test model-package-example golden-test synth-sweep synth-report
 .PHONY: top-impl top-report programmable-top-synth programmable-top-impl programmable-top-report baremetal-headers baremetal-runtime-test runtime-corpus-test vitis-app
 .PHONY: zybo-z7-project zybo-z7-bitstream zybo-z7-xsa full-zybo-z7-flow
 .PHONY: boot-image full-preboard-proof program-zybo-z7
@@ -33,6 +33,9 @@ programmable-runtime-test:
 	bash scripts/run_requantizer_tb.sh
 	bash scripts/run_numeric_runtime_tb.sh
 	bash scripts/run_programmable_runtime_tb.sh
+
+programmable-performance-test:
+	bash scripts/run_programmable_performance_tb.sh
 
 numeric-runtime-test:
 	bash scripts/run_requantizer_tb.sh

@@ -85,6 +85,11 @@ module cnn_programmable_system_top #(
   logic [2:0] error_layer;
   logic [31:0] packet_error_count;
   logic [1:0] parameter_bank_valid;
+  logic perf_compute_active;
+  logic perf_parameter_stall;
+  logic perf_input_starved;
+  logic [4:0] performance_word_index;
+  logic [31:0] performance_word_data;
   logic [4:0] structured_error_word_index;
   logic [31:0] structured_error_word_data;
   logic error_q;
@@ -175,6 +180,8 @@ module cnn_programmable_system_top #(
     .core_error_layer(error_layer),
     .packet_error_count(packet_error_count),
     .parameter_bank_valid(parameter_bank_valid),
+    .performance_word_index(performance_word_index),
+    .performance_word_data(performance_word_data),
     .structured_error_word_index(structured_error_word_index),
     .structured_error_word_data(structured_error_word_data)
   );
@@ -196,6 +203,23 @@ module cnn_programmable_system_top #(
     .detail({current_tile_y, current_tile_x}),
     .word_index(structured_error_word_index),
     .word_data(structured_error_word_data)
+  );
+
+  cnn_programmable_performance_counters #(
+    .MAX_LAYERS(MAX_LAYERS)
+  ) u_performance (
+    .clk(aclk), .rst_n(aresetn), .clear(clear_pulse),
+    .job_start(start_pulse && !busy), .job_done(done), .job_error(error),
+    .controller_active(busy), .compute_active(perf_compute_active),
+    .active_layer(active_layer), .parameter_stall(perf_parameter_stall),
+    .input_starved(perf_input_starved),
+    .input_valid(s_axis_tvalid), .input_ready(s_axis_tready),
+    .input_keep(s_axis_tkeep), .output_valid(m_axis_tvalid),
+    .output_ready(m_axis_tready), .output_keep(m_axis_tkeep),
+    .saturation_events(saturation_event_count),
+    .completed_layers(completed_layer_count),
+    .completed_tiles(completed_tile_count),
+    .word_index(performance_word_index), .word_data(performance_word_data)
   );
 
   cnn_programmable_runtime_top #(
@@ -239,7 +263,10 @@ module cnn_programmable_system_top #(
     .completed_layer_count(completed_layer_count),
     .completed_tile_count(completed_tile_count),
     .saturation_event_count(saturation_event_count),
-    .layer_done(layer_done), .busy(busy), .done(done), .error(error),
+    .layer_done(layer_done), .perf_compute_active(perf_compute_active),
+    .perf_parameter_stall(perf_parameter_stall),
+    .perf_input_starved(perf_input_starved),
+    .busy(busy), .done(done), .error(error),
     .error_code(error_code), .error_source(error_source),
     .error_layer(error_layer),
     .packet_error_count(packet_error_count),

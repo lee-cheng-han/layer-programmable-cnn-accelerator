@@ -54,6 +54,7 @@ verilator --lint-only \
  rtl/runtime/cnn_tiled_layer_runtime.sv \
  rtl/runtime/cnn_tiled_multi_layer_controller.sv \
  rtl/runtime/cnn_programmable_runtime_top.sv \
+ rtl/runtime/cnn_programmable_performance_counters.sv \
  rtl/zynq/cnn_programmable_axi_lite_slave.sv \
  rtl/zynq/cnn_programmable_system_top.sv \
  rtl/zynq/cnn_programmable_system_bd_wrapper.v \

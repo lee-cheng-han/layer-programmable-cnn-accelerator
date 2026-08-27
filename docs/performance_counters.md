@@ -47,19 +47,39 @@ AXI-Lite registers in `cnn_axi_lite_slave`. See
 
 ## Final V1 Observability
 
-The counters above describe the current fixed three-layer bitstream. The final
-descriptor-driven V1 runtime additionally requires:
+The programmable runtime now provides an independent snapshot at `0x080` and
+retains it after completion or failure:
 
 | Counter | Meaning |
 |---|---|
-| Per-layer cycle count | Complete scheduler ownership time for each of up to eight layers |
-| Parameter-prefetch stall cycles | Compute waited for the next active parameter bank |
-| Tile-load / tile-store cycles | DDR-backed input and output tile movement |
-| DMA starvation cycles | Compute required data that the data plane had not supplied |
-| Positive saturation events | Requantized values clipped above +127 |
-| Negative saturation events | Requantized values clipped below -128 |
+| Job cycles | Accepted start through completion or failure |
+| Controller cycles | Descriptor and layer-controller ownership time |
+| Compute-active cycles | Tiled layer runtime busy cycles |
+| Parameter stalls | Runtime requested a reusable parameter bank that was not ready |
+| Input starvation | Runtime requested an activation packet or payload beat that was absent |
+| Output backpressure | Output `TVALID && !TREADY` cycles |
+| Input/output bytes | Exact accepted `TKEEP` byte lanes, including packet headers |
+| Saturation events | Requantization and residual INT8 clipping events |
+| Per-layer cycles | Controller ownership time for each of up to eight layers |
+
+| Offset | Counter |
+|---:|---|
+| `0x080` | job cycles |
+| `0x084` | controller cycles |
+| `0x088` | compute-active cycles |
+| `0x08C` | parameter-stall cycles |
+| `0x090` | input-starvation cycles |
+| `0x094` | output-backpressure cycles |
+| `0x098` | input bytes |
+| `0x09C` | output bytes |
+| `0x0A0` | saturation events |
+| `0x0A4` | completed layers |
+| `0x0A8` | completed tiles |
+| `0x0AC` | bit 0: snapshot currently counting |
+| `0x0C0`-`0x0DC` | layer 0 through layer 7 cycles |
 
 Saturation counters increment once per clipped tensor element, not once per
-cycle. Both per-layer and whole-job totals are retained with the active model
-ID and generation ID. The `parallel_requantizer` already emits positive and
-negative lane masks; Phase 9 connects those events to the runtime counters.
+cycle. The bare-metal bring-up application prints job, controller, compute,
+stall, byte, and per-layer cycle values after a passing run. Actual MAC issue
+counting remains a separate refinement: it must use the compute engines' valid
+and lane-mask signals rather than a geometry-derived estimate.

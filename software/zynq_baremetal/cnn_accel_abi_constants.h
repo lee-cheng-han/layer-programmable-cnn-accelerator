@@ -53,6 +53,26 @@
 #define CNN_REG_OUTPUT_DDR_LO                       0x060u
 #define CNN_REG_OUTPUT_DDR_HI                       0x064u
 #define CNN_REG_SATURATION_EVENTS                   0x068u
+#define CNN_REG_PERF_JOB_CYCLES                     0x080u
+#define CNN_REG_PERF_CONTROLLER_CYCLES              0x084u
+#define CNN_REG_PERF_COMPUTE_CYCLES                 0x088u
+#define CNN_REG_PERF_PARAMETER_STALLS               0x08Cu
+#define CNN_REG_PERF_INPUT_STARVATION               0x090u
+#define CNN_REG_PERF_OUTPUT_BACKPRESSURE            0x094u
+#define CNN_REG_PERF_INPUT_BYTES                    0x098u
+#define CNN_REG_PERF_OUTPUT_BYTES                   0x09Cu
+#define CNN_REG_PERF_SATURATION_EVENTS              0x0A0u
+#define CNN_REG_PERF_COMPLETED_LAYERS               0x0A4u
+#define CNN_REG_PERF_COMPLETED_TILES                0x0A8u
+#define CNN_REG_PERF_STATUS                         0x0ACu
+#define CNN_REG_PERF_LAYER0_CYCLES                  0x0C0u
+#define CNN_REG_PERF_LAYER1_CYCLES                  0x0C4u
+#define CNN_REG_PERF_LAYER2_CYCLES                  0x0C8u
+#define CNN_REG_PERF_LAYER3_CYCLES                  0x0CCu
+#define CNN_REG_PERF_LAYER4_CYCLES                  0x0D0u
+#define CNN_REG_PERF_LAYER5_CYCLES                  0x0D4u
+#define CNN_REG_PERF_LAYER6_CYCLES                  0x0D8u
+#define CNN_REG_PERF_LAYER7_CYCLES                  0x0DCu
 #define CNN_REG_STRUCTURED_ERROR_BASE               0x180u
 #define CNN_REG_VERSION                             0x0FCu
 

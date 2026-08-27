@@ -222,14 +222,12 @@ Source evidence:
 | `0x004` | `STATUS` | Busy, done, error, and counter state |
 | `0x008` | `IRQ_STATUS` | Sticky done and error status |
 | `0x00C` | `IRQ_ENABLE` | Done and error interrupt enables |
-| `0x010` | `IMAGE_WIDTH` | Runtime image width |
-| `0x014` | `IMAGE_HEIGHT` | Runtime image height |
-| `0x018` | `MODE_FLAGS` | Residual reconstruction enable |
-| `0x01C` | `ERROR_CODE` | Packet or compute error code |
-| `0x020` | `STREAM_STATE` | Active packet and layer readiness |
-| `0x024` | `PACKET_WORDS` | Accepted words in the active packet |
-| `0x028`-`0x054` | `MODEL_*`, `METADATA_*` | Metadata loading, validation, atomic activation, and model identity |
-| `0x080`-`0x0A8` | `PERF_*` | Job, layer, transfer, overlap, and stall counters |
+| `0x010` | `JOB_ID` | Expected packed-packet job ID |
+| `0x014` | `PARAMETER_LAYER` | Descriptor selected for parameter loading |
+| `0x018`-`0x038` | `MODEL_*`, `METADATA_*` | Metadata loading, validation, atomic activation, and model identity |
+| `0x03C`-`0x068` | `RUNTIME_*`, `ACTIVE_*`, `COMPLETED_*` | Error, tensor, tile, parameter-bank, DDR, and saturation context |
+| `0x080`-`0x0AC` | `PERF_*` | Job, compute, byte, saturation, and stall counters |
+| `0x0C0`-`0x0DC` | `PERF_LAYERn_CYCLES` | Per-layer controller ownership cycles |
 | `0x0FC` | `VERSION` | Interface version (`0x00050001`) |
 | `0x100`-`0x17C` | `CAPABILITY_*` | Versioned implementation capability record |
 | `0x180`-`0x1BC` | `ERROR_RECORD_*` | Sticky structured failure context |
@@ -240,7 +238,9 @@ The complete software contract is documented in
 
 ### Tensor Stream Protocol
 
-One job consists of seven ordered AXI-Stream packets:
+The legacy regression job consists of seven ordered AXI-Stream packets. The
+production programmable runtime uses the versioned packed protocol described
+below.
 
 | Packet | Payload |
 |---:|---|

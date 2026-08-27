@@ -72,6 +72,24 @@ static void print_structured_error(void)
                (uint32_t)record.observed_value, record.detail);
 }
 
+static void print_performance_snapshot(uint16_t layer_count)
+{
+    xil_printf(" perf job=%u controller=%u compute=%u parameter_stall=%u\r\n",
+               cnn_read(CNN_REG_PERF_JOB_CYCLES),
+               cnn_read(CNN_REG_PERF_CONTROLLER_CYCLES),
+               cnn_read(CNN_REG_PERF_COMPUTE_CYCLES),
+               cnn_read(CNN_REG_PERF_PARAMETER_STALLS));
+    xil_printf(" perf input_starvation=%u output_backpressure=%u input_bytes=%u output_bytes=%u\r\n",
+               cnn_read(CNN_REG_PERF_INPUT_STARVATION),
+               cnn_read(CNN_REG_PERF_OUTPUT_BACKPRESSURE),
+               cnn_read(CNN_REG_PERF_INPUT_BYTES),
+               cnn_read(CNN_REG_PERF_OUTPUT_BYTES));
+    for (uint16_t layer = 0; layer < layer_count; ++layer) {
+        xil_printf(" perf layer[%u]=%u cycles\r\n", layer,
+                   cnn_read(CNN_REG_PERF_LAYER0_CYCLES + 4U * layer));
+    }
+}
+
 static inline void dma_write(uint32_t offset, uint32_t value)
 {
     Xil_Out32(DMA_BASE + offset, value);
@@ -399,8 +417,10 @@ static int run_model(const struct cnn_model_view *model, const uint8_t *input_da
     }
     for (uint32_t count = 0; count < POLL_TIMEOUT; ++count) {
         uint32_t status = cnn_read(CNN_REG_STATUS);
-        if ((status & CNN_STATUS_ERROR) != 0U)
+        if ((status & CNN_STATUS_ERROR) != 0U) {
+            print_structured_error();
             return -1;
+        }
         if ((status & CNN_STATUS_DONE) != 0U)
             return 0;
     }
@@ -447,6 +467,7 @@ int main(void)
                model.model_id, model.generation_id, model.layer_count,
                cnn_read(CNN_REG_COMPLETED_TILES),
                cnn_read(CNN_REG_SATURATION_EVENTS));
+    print_performance_snapshot(model.layer_count);
 
 finished:
     while (1)

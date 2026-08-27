@@ -66,6 +66,8 @@ module cnn_programmable_axi_lite_slave #(
   input  logic [2:0] core_error_layer,
   input  logic [31:0] packet_error_count,
   input  logic [1:0] parameter_bank_valid,
+  output logic [4:0] performance_word_index,
+  input  logic [31:0] performance_word_data,
   output logic [4:0] structured_error_word_index,
   input  logic [31:0] structured_error_word_data
 );
@@ -98,6 +100,8 @@ module cnn_programmable_axi_lite_slave #(
   localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_OUTPUT_DDR_LO = REG_OUTPUT_DDR_LO;
   localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_OUTPUT_DDR_HI = REG_OUTPUT_DDR_HI;
   localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_SATURATION_EVENTS = REG_SATURATION_EVENTS;
+  localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_PERFORMANCE_BASE =
+    REG_PERF_JOB_CYCLES;
   localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_STRUCTURED_ERROR_BASE =
     REG_STRUCTURED_ERROR_BASE;
   localparam logic [AXI_ADDR_WIDTH-1:0] ADDR_VERSION = REG_VERSION;
@@ -145,6 +149,8 @@ module cnn_programmable_axi_lite_slave #(
     apply_wstrb({29'd0, parameter_layer_select}, wdata_q, wstrb_q);
   assign structured_error_word_index =
     (s_axi_araddr - ADDR_STRUCTURED_ERROR_BASE) >> 2;
+  assign performance_word_index =
+    (s_axi_araddr - ADDR_PERFORMANCE_BASE) >> 2;
 
   always_ff @(posedge s_axi_aclk or negedge s_axi_aresetn) begin
     if (!s_axi_aresetn) begin
@@ -311,7 +317,10 @@ module cnn_programmable_axi_lite_slave #(
           ADDR_SATURATION_EVENTS: s_axi_rdata <= saturation_event_count;
           ADDR_VERSION: s_axi_rdata <= REGISTER_MAP_VERSION;
           default: begin
-            if ((s_axi_araddr >= ADDR_STRUCTURED_ERROR_BASE) &&
+            if ((s_axi_araddr >= ADDR_PERFORMANCE_BASE) &&
+                (s_axi_araddr < ADDR_VERSION)) begin
+              s_axi_rdata <= performance_word_data;
+            end else if ((s_axi_araddr >= ADDR_STRUCTURED_ERROR_BASE) &&
                 (s_axi_araddr < ADDR_STRUCTURED_ERROR_BASE +
                  ERROR_RECORD_BYTES)) begin
               s_axi_rdata <= structured_error_word_data;

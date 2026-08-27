@@ -40,6 +40,11 @@ echo "[UNIT] tb_parallel_requantizer (Verilator)"
 echo "============================================================"
 bash scripts/run_requantizer_tb.sh
 
+echo "============================================================"
+echo "[UNIT] tb_programmable_performance_counters (Verilator)"
+echo "============================================================"
+bash scripts/run_programmable_performance_tb.sh
+
 for tb in "${TESTS[@]}"; do
  echo "============================================================"
  echo "[UNIT] $tb"

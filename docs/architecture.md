@@ -134,7 +134,10 @@ The accelerator uses AXI-Lite for control and observability. Tensor payloads are
 | `0x054` | `PARAMETER_BANKS` | Valid reusable parameter banks |
 | `0x058`-`0x064` | `INPUT_DDR`, `OUTPUT_DDR` | Active tensor DDR offsets |
 | `0x068` | `SATURATION_EVENTS` | Requantization and residual clipping events |
+| `0x080`-`0x0AC` | `PERF_*` | Retained job, compute, byte, stall, and completion snapshot |
+| `0x0C0`-`0x0DC` | `PERF_LAYERn_CYCLES` | Per-layer controller ownership cycles |
 | `0x0FC` | `VERSION` | Register-map version, `0x00050001` |
+| `0x180`-`0x1BC` | `STRUCTURED_ERROR` | Sticky versioned first-fault record |
 
 ## Software Interaction
 

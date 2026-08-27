@@ -132,6 +132,7 @@ module cnn_tiled_multi_layer_controller #(
   output logic [31:0] completed_tile_count,
   output logic [31:0] saturation_event_count,
   output logic layer_done,
+  output logic compute_active,
   output logic busy,
   output logic done,
   output logic error,
@@ -233,6 +234,7 @@ module cnn_tiled_multi_layer_controller #(
   logic runtime_error;
   logic [7:0] runtime_error_code;
   logic [31:0] runtime_saturation_event_count;
+  logic runtime_busy;
   logic descriptor_semantic_valid;
   logic [7:0] descriptor_error_code;
   logic descriptor_is_final;
@@ -344,6 +346,7 @@ module cnn_tiled_multi_layer_controller #(
   assign descriptor_layer_index = layer_index;
   assign active_layer = layer_index;
   assign busy = (state != S_IDLE) && (state != S_DONE);
+  assign compute_active = runtime_busy;
   assign runtime_start = state == S_START_LAYER;
   assign descriptor_is_final =
     (4'(layer_index) + 4'd1) == layer_count_q;
@@ -523,7 +526,7 @@ module cnn_tiled_multi_layer_controller #(
     .current_tile_y(current_tile_y),
     .completed_tile_count(completed_tile_count),
     .saturation_event_count(runtime_saturation_event_count),
-    .busy(),
+    .busy(runtime_busy),
     .done(runtime_done),
     .error(runtime_error),
     .error_code(runtime_error_code)

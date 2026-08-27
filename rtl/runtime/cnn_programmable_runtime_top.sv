@@ -64,6 +64,9 @@ module cnn_programmable_runtime_top #(
   output logic [31:0] completed_tile_count,
   output logic [31:0] saturation_event_count,
   output logic layer_done,
+  output logic perf_compute_active,
+  output logic perf_parameter_stall,
+  output logic perf_input_starved,
   output logic busy,
   output logic done,
   output logic error,
@@ -233,6 +236,10 @@ module cnn_programmable_runtime_top #(
   assign error_source = controller_error ? 2'd0 :
                         (router_error ? 2'd1 :
                          (parameter_error ? 2'd2 : 2'd3));
+  assign perf_parameter_stall = busy && parameter_request && !parameter_ready;
+  assign perf_input_starved = busy &&
+    ((activation_packet_ready && !activation_packet_start) ||
+     (activation_ready && !activation_valid));
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -599,7 +606,8 @@ module cnn_programmable_runtime_top #(
     .completed_layer_count(completed_layer_count),
     .completed_tile_count(completed_tile_count),
     .saturation_event_count(saturation_event_count),
-    .layer_done(layer_done), .busy(busy), .done(controller_done),
+    .layer_done(layer_done), .compute_active(perf_compute_active),
+    .busy(busy), .done(controller_done),
     .error(controller_error), .error_code(controller_error_code),
     .error_layer(error_layer)
   );

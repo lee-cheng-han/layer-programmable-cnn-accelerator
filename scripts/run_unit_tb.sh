@@ -73,7 +73,9 @@ xvlog -sv -L work \
  ../../rtl/runtime/cnn_tiled_layer_runtime.sv \
  ../../rtl/runtime/cnn_tiled_multi_layer_controller.sv \
  ../../rtl/runtime/cnn_programmable_runtime_top.sv \
+ ../../rtl/runtime/cnn_programmable_performance_counters.sv \
  ../../rtl/zynq/cnn_programmable_axi_lite_slave.sv \
+ ../../rtl/zynq/cnn_structured_error_snapshot.sv \
  ../../rtl/zynq/cnn_programmable_system_top.sv \
  ../../rtl/zynq/cnn_programmable_system_bd_wrapper.v \
  ../../rtl/scheduler/denoise_layer_descriptor_rom.sv \
@@ -88,7 +90,6 @@ xvlog -sv -L work \
  ../../rtl/scheduler/multi_layer_job_controller.sv \
  ../../rtl/scheduler/stream_loaded_multi_layer_job_controller.sv \
  ../../rtl/zynq/cnn_runtime_capabilities.sv \
- ../../rtl/zynq/cnn_structured_error_snapshot.sv \
  ../../rtl/zynq/cnn_axi_lite_slave.sv \
  ../../rtl/zynq/cnn_image2image_axi_stream_top.sv \
  ../../rtl/zynq/cnn_image2image_system_top.sv \
