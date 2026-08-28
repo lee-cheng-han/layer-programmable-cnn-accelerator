@@ -67,6 +67,8 @@ module cnn_programmable_runtime_top #(
   output logic perf_compute_active,
   output logic perf_parameter_stall,
   output logic perf_input_starved,
+  output logic perf_mac_issue_valid,
+  output logic [15:0] perf_mac_issue_count,
   output logic busy,
   output logic done,
   output logic error,
@@ -607,6 +609,8 @@ module cnn_programmable_runtime_top #(
     .completed_tile_count(completed_tile_count),
     .saturation_event_count(saturation_event_count),
     .layer_done(layer_done), .compute_active(perf_compute_active),
+    .mac_issue_valid(perf_mac_issue_valid),
+    .mac_issue_count(perf_mac_issue_count),
     .busy(busy), .done(controller_done),
     .error(controller_error), .error_code(controller_error_code),
     .error_layer(error_layer)

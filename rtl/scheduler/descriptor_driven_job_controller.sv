@@ -334,6 +334,8 @@ module descriptor_driven_job_controller #(
     .output_pixel_data(),
     .output_pixel_last(),
     .output_pixel_saturation_count(),
+    .mac_issue_valid(),
+    .mac_issue_count(),
     .current_x(),
     .current_y(),
     .busy(),

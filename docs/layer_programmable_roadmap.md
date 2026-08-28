@@ -22,7 +22,7 @@ atomically activated, and reused across multiple images.
 | 7 | Introduce packed, versioned DMA protocol | Complete |
 | 8 | Implement DDR-backed spatial tiling and halo handling | Complete through portable software-managed DDR runtime |
 | 9 | Complete residual and quantization behavior in runtime RTL | Complete |
-| 10 | Build runtime software and connect interrupts | Polling runtime and board interrupt wiring complete; interrupt-driven scheduling remains |
+| 10 | Build runtime software and connect interrupts | GIC-backed DMA and final-completion waits integrated; layer/bank scheduling still polls |
 | 11 | Add autonomous DDR fetching | Planned |
 | 12 | Expand protocol, randomized, golden, and negative verification | Complete for pre-board scope |
 | 13 | Optimize performance and validate physical hardware | Planned |
@@ -118,11 +118,11 @@ documented interface or an isolated module.
 | 1 | Close actual RTL tensor chaining | Implemented | The UVM DDR model scatters observed RTL output packets into strided tensor memory and gathers that memory for the next layer; the two-layer test injects no intermediate golden tensor |
 | 2 | Complete UVM verification and coverage closure | U4 complete; U5 functional target closed | Preserve the 96.72% functional result, obtain fresh code reports from a stable tool flow, review scoped exclusions, measure assertion coverage, and meet every remaining target |
 | 3 | Improve structured error propagation | First-fault aperture and firmware decode complete; internal detail partial | First-failure records identify subsystem, model generation, layer, tensor, tile, packet field, observed value, and expected range for every programmable-runtime failure |
-| 4 | Complete runtime observability | Programmable cycle/stall/byte/saturation snapshot complete; actual MAC issue count remains | Per-layer and per-job cycles, MAC-active cycles, input starvation, output backpressure, parameter stalls, bytes, MACs, and saturation events are software-visible and tested |
-| 5 | Expand measurable verification coverage | Baseline complete | CI records coverage across 1-8 layers, both kernels, both strides, all activations and residual modes, asymmetric boundaries, channel tails, partial beats, clipping, and multiple deterministic seeds |
+| 4 | Complete runtime observability | Implemented | Per-layer and per-job cycles, MAC-active cycles, input starvation, output backpressure, parameter stalls, bytes, MACs, and saturation events are software-visible and tested |
+| 5 | Expand measurable verification coverage | Three-seed software corpus complete; licensed RTL coverage remains | CI records coverage across 1-8 layers, both kernels, both strides, all activations and residual modes, asymmetric boundaries, channel tails, partial beats, clipping, and multiple deterministic seeds |
 | 6 | Complete memory and recovery fault campaign | Partial | Tests cover corrupted parameters, stale tensor IDs, packet reordering, aborted jobs, DMA timeout, active-model replacement, and successful rerun without reset |
-| 7 | Harden the software ABI | Generated constants complete; record serializers remain language-native | One machine-readable schema generates Python, C, and SystemVerilog constants and register definitions; CI checks generated files and cross-language record sizes |
-| 8 | Add interrupt-driven scheduling | Planned | DMA and accelerator interrupts advance parameter/tile work without polling, while timeout and error recovery remain deterministic |
+| 7 | Harden the software ABI | Implemented | One machine-readable schema generates Python, C, and SystemVerilog constants, record layouts, and register definitions; CI checks generated files and cross-language record sizes and offsets |
+| 8 | Add interrupt-driven scheduling | DMA and final accelerator completion integrated; layer/bank progression still polls | DMA and accelerator interrupts advance parameter/tile work without polling, while timeout and error recovery remain deterministic |
 | 9 | Regenerate the production board implementation | Pending current source baseline | The Zybo Z7-20 block design passes multiple clean 125 MHz implementation runs and archives bitstream, XSA, ELF, BOOT.BIN, timing, utilization, congestion, power, and warning reports with hashes |
 | 10 | Validate physical hardware | Board required | UART, ILA, device view, correctness, recovery, and measured 224x224/512x512 performance evidence are archived |
 | 11 | Retire the fixed-network compatibility path | Waiting for board parity | Legacy execution RTL, software, build targets, and documentation are removed only after programmable hardware regression parity |

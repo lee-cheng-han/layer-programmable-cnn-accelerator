@@ -149,6 +149,12 @@ baremetal-runtime-test: model-package-example
 		tests/c/test_programmable_runtime.c \
 		-o build/host_tests/test_programmable_runtime
 	build/host_tests/test_programmable_runtime build/models/rgb_identity.cnn
+	$(CC) -std=c11 -Wall -Wextra -Wpedantic -Werror \
+		-Isoftware/zynq_baremetal \
+		software/zynq_baremetal/cnn_interrupt_runtime.c \
+		tests/c/test_interrupt_runtime.c \
+		-o build/host_tests/test_interrupt_runtime
+	build/host_tests/test_interrupt_runtime
 	$(CC) -std=c11 -Wall -Wextra -Wpedantic -Werror -Wno-main \
 		-Itests/c/xilinx_stubs -Isoftware/zynq_baremetal \
 		-c software/zynq_baremetal/main.c \
@@ -156,7 +162,11 @@ baremetal-runtime-test: model-package-example
 
 runtime-corpus-test:
 	python3 scripts/generate_runtime_verification_corpus.py \
-		--output build/runtime_corpus --cases 24 --seed 20260809
+		--output build/runtime_corpus/seed_20260809 --cases 24 --seed 20260809
+	python3 scripts/generate_runtime_verification_corpus.py \
+		--output build/runtime_corpus/seed_20260817 --cases 24 --seed 20260817
+	python3 scripts/generate_runtime_verification_corpus.py \
+		--output build/runtime_corpus/seed_20260825 --cases 24 --seed 20260825
 	mkdir -p build/host_tests
 	$(CC) -std=c11 -Wall -Wextra -Wpedantic -Werror \
 		-Isoftware/zynq_baremetal \
@@ -164,7 +174,7 @@ runtime-corpus-test:
 		tests/c/test_programmable_runtime_corpus.c \
 		-o build/host_tests/test_programmable_runtime_corpus
 	build/host_tests/test_programmable_runtime_corpus \
-		build/runtime_corpus/case_*.cnn
+		build/runtime_corpus/seed_*/case_*.cnn
 
 vitis-app: baremetal-headers
 	mkdir -p $(VITIS_DATA_DIR)

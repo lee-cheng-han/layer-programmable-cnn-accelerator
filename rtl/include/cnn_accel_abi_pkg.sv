@@ -108,52 +108,6 @@ package cnn_accel_abi_pkg;
   localparam logic [15:0] TENSOR_FLAG_MODEL_OUTPUT = 16'h0002;
   localparam logic [15:0] TENSOR_FLAG_CONSTANT = 16'h0004;
 
-  localparam int unsigned MH_PACKAGE_SIZE_OFS = 8;
-  localparam int unsigned MH_LAYER_COUNT_OFS = 24;
-  localparam int unsigned MH_LAYER_TABLE_OFS = 32;
-  localparam int unsigned MH_TENSOR_TABLE_OFS = 36;
-  localparam int unsigned MH_QUANT_TABLE_OFS = 40;
-  localparam int unsigned MH_PARAMETER_DATA_OFS = 44;
-  localparam int unsigned MH_PACKAGE_CRC32_OFS = 56;
-  localparam int unsigned MH_INPUT_TENSOR_ID_OFS = 60;
-  localparam int unsigned MH_PACKAGE_SHA256_OFS = 64;
-
-  localparam int unsigned LD_LAYER_ID_OFS = 4;
-  localparam int unsigned LD_INPUT_TENSOR_ID_OFS = 12;
-  localparam int unsigned LD_WEIGHT_OFFSET_OFS = 20;
-  localparam int unsigned LD_PARAMETER_CRC32_OFS = 36;
-  localparam int unsigned LD_GEOMETRY_OFS = 40;
-  localparam int unsigned LD_TILE_HINT_OFS = 52;
-
-  localparam int unsigned TD_TENSOR_ID_OFS = 4;
-  localparam int unsigned TD_DDR_OFFSET_OFS = 8;
-  localparam int unsigned TD_WIDTH_OFS = 20;
-  localparam int unsigned TD_ROW_STRIDE_OFS = 36;
-
-  localparam int unsigned QD_QUANTIZATION_ID_OFS = 4;
-  localparam int unsigned QD_CHANNEL_COUNT_OFS = 8;
-  localparam int unsigned QD_ROUNDING_MODE_OFS = 10;
-  localparam int unsigned QD_OUTPUT_ZERO_POINT_OFS = 11;
-  localparam int unsigned QD_CHANNEL_PARAMS_OFS = 64;
-  localparam int unsigned QD_CHANNEL_PARAM_BYTES = 8;
-
-  localparam int unsigned CAP_HARDWARE_VERSION_OFS = 4;
-  localparam int unsigned CAP_MODEL_ABI_VERSION_OFS = 8;
-  localparam int unsigned CAP_FEATURE_FLAGS_OFS = 12;
-  localparam int unsigned CAP_LIMITS_OFS = 44;
-  localparam int unsigned CAP_MAX_TENSOR_ELEMENTS_OFS = 64;
-  localparam int unsigned CAP_BANK_CAPACITY_OFS = 68;
-  localparam int unsigned CAP_PARALLELISM_OFS = 88;
-  localparam int unsigned CAP_CLOCK_HZ_OFS = 92;
-
-  localparam int unsigned ERR_CODE_OFS = 4;
-  localparam int unsigned ERR_CONTEXT_OFS = 8;
-  localparam int unsigned ERR_RECORD_INDEX_OFS = 12;
-  localparam int unsigned ERR_OBSERVED_OFS = 16;
-  localparam int unsigned ERR_EXPECTED_MIN_OFS = 24;
-  localparam int unsigned ERR_EXPECTED_MAX_OFS = 32;
-  localparam int unsigned ERR_MODEL_ID_OFS = 40;
-  localparam int unsigned ERR_DETAIL_OFS = 48;
 endpackage
 
 `default_nettype wire

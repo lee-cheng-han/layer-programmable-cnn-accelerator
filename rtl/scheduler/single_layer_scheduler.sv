@@ -65,6 +65,8 @@ module single_layer_scheduler #(
   output logic signed [OUT_W-1:0] output_pixel_data [MAX_COUT],
   output logic output_pixel_last,
   output logic [31:0] output_pixel_saturation_count,
+  output logic mac_issue_valid,
+  output logic [15:0] mac_issue_count,
   output logic [DIM_W-1:0] current_x,
   output logic [DIM_W-1:0] current_y,
   output logic busy,
@@ -97,6 +99,10 @@ module single_layer_scheduler #(
   logic busy_3x3;
   logic [31:0] saturation_count_1x1;
   logic [31:0] saturation_count_3x3;
+  logic mac_issue_valid_1x1;
+  logic mac_issue_valid_3x3;
+  logic [15:0] mac_issue_count_1x1;
+  logic [15:0] mac_issue_count_3x3;
 
   logic signed [DATA_W-1:0] activation_1x1 [MAX_CIN];
   logic signed [OUT_W-1:0] output_1x1 [MAX_COUT];
@@ -123,6 +129,10 @@ module single_layer_scheduler #(
   assign busy = (state != S_IDLE) && (state != S_DONE);
   assign start_1x1 = (state == S_START_PIXEL) && (kernel_size == 2'd1);
   assign start_3x3 = (state == S_START_PIXEL) && (kernel_size == 2'd3);
+  assign mac_issue_valid = (kernel_size == 2'd1) ? mac_issue_valid_1x1 :
+                           (kernel_size == 2'd3) ? mac_issue_valid_3x3 : 1'b0;
+  assign mac_issue_count = (kernel_size == 2'd1) ? mac_issue_count_1x1 :
+                           (kernel_size == 2'd3) ? mac_issue_count_3x3 : 16'd0;
   assign output_pixel_index_calc =
     (ADDR_W'(out_y) * ADDR_W'(output_width)) + ADDR_W'(out_x);
   assign scratch_activation_read_pixel =
@@ -228,6 +238,8 @@ module single_layer_scheduler #(
     .scratch_weight_mat_data(scratch_weight_mat_data),
     .output_data(output_1x1),
     .saturation_event_count(saturation_count_1x1),
+    .mac_issue_valid(mac_issue_valid_1x1),
+    .mac_issue_count(mac_issue_count_1x1),
     .busy(busy_1x1),
     .done(done_1x1)
   );
@@ -283,6 +295,8 @@ module single_layer_scheduler #(
     .scratch_weight_mat_data(scratch_weight_mat_data),
     .output_data(output_3x3),
     .saturation_event_count(saturation_count_3x3),
+    .mac_issue_valid(mac_issue_valid_3x3),
+    .mac_issue_count(mac_issue_count_3x3),
     .busy(busy_3x3),
     .done(done_3x3)
   );

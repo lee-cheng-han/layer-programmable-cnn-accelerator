@@ -49,6 +49,8 @@ module tiled_conv1x1_engine #(
 
   output logic signed [OUT_W-1:0] output_data [MAX_COUT],
   output logic [31:0] saturation_event_count,
+  output logic mac_issue_valid,
+  output logic [15:0] mac_issue_count,
   output logic busy,
   output logic done
 );
@@ -297,6 +299,16 @@ module tiled_conv1x1_engine #(
   );
 
   assign mac_valid_in    = (state == S_ISSUE);
+  assign mac_issue_valid = mac_valid_in;
+  always_comb begin
+    mac_issue_count = '0;
+    for (int pk = 0; pk < PK; pk++) begin
+      for (int pc = 0; pc < PC; pc++) begin
+        if (cout_lane_mask[pk] && cin_lane_mask[pc])
+          mac_issue_count = mac_issue_count + 16'd1;
+      end
+    end
+  end
   assign psum_clear      = (state == S_CLEAR);
   assign psum_accumulate = (state == S_WAIT_MAC) && mac_valid_out;
   assign busy            = (state != S_IDLE) && (state != S_DONE);

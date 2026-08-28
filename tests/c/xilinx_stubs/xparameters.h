@@ -1,0 +1,6 @@
+#ifndef XPARAMETERS_H
+#define XPARAMETERS_H
+
+#define XPAR_XSCUGIC_0_BASEADDR 0xF8F01000u
+
+#endif

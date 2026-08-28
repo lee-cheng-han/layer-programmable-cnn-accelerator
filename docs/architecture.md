@@ -107,7 +107,9 @@ The production board path uses `cnn_programmable_system_top`. It connects
 the atomically active metadata view through `cnn_programmable_job_engine` to
 two runtime parameter banks and the tiled multi-layer runtime. The generated
 Zybo block design selects its `TKEEP`-aware wrapper and routes the CNN and both
-DMA interrupts to the PS. DDR gather/scatter, cache maintenance, parameter-bank
+DMA interrupts to the PS. The bare-metal application connects all three lines
+through the Zynq GIC and retains events until the scheduler consumes them.
+DDR gather/scatter, cache maintenance, parameter-bank
 refill, and package activation are implemented in the portable bare-metal
 runtime; a rebuilt board implementation and target ELF remain. The numeric path resolves active per-channel
 multiplier/shift/zero-point descriptors, performs pipelined round-half-to-even
@@ -134,7 +136,7 @@ The accelerator uses AXI-Lite for control and observability. Tensor payloads are
 | `0x054` | `PARAMETER_BANKS` | Valid reusable parameter banks |
 | `0x058`-`0x064` | `INPUT_DDR`, `OUTPUT_DDR` | Active tensor DDR offsets |
 | `0x068` | `SATURATION_EVENTS` | Requantization and residual clipping events |
-| `0x080`-`0x0AC` | `PERF_*` | Retained job, compute, byte, stall, and completion snapshot |
+| `0x080`-`0x0B4` | `PERF_*` | Retained job, compute, byte, stall, issued-MAC, and completion snapshot |
 | `0x0C0`-`0x0DC` | `PERF_LAYERn_CYCLES` | Per-layer controller ownership cycles |
 | `0x0FC` | `VERSION` | Register-map version, `0x00050001` |
 | `0x180`-`0x1BC` | `STRUCTURED_ERROR` | Sticky versioned first-fault record |

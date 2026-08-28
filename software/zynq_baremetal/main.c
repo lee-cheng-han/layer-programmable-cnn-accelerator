@@ -2,12 +2,16 @@
 #include "xil_cache.h"
 #include "xil_io.h"
 #include "xil_printf.h"
+#include "xil_exception.h"
+#include "xparameters.h"
+#include "xscugic.h"
 
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
 #include "cnn_programmable_runtime.h"
+#include "cnn_interrupt_runtime.h"
 #include "generated/programmable_demo.h"
 
 #define CNN_BASE 0x43C00000U
@@ -23,6 +27,8 @@
 #define DMA_S2MM_LENGTH 0x58U
 #define DMA_CR_RUNSTOP 0x00000001U
 #define DMA_CR_RESET 0x00000004U
+#define DMA_CR_IOC_IRQ_ENABLE 0x00001000U
+#define DMA_CR_ERROR_IRQ_ENABLE 0x00004000U
 #define DMA_SR_IOC_IRQ 0x00001000U
 #define DMA_SR_ERR_ALL 0x00004770U
 #define DMA_SR_IRQ_ALL 0x00007000U
@@ -32,12 +38,17 @@
 #define CNN_WORKSPACE_BASE 0x10000000U
 #define CNN_WORKSPACE_CAPACITY (256U * 1024U * 1024U)
 #define DEMO_JOB_ID 1U
+#define CNN_INTERRUPT_ID 61U
+#define DMA_MM2S_INTERRUPT_ID 62U
+#define DMA_S2MM_INTERRUPT_ID 63U
 
 static uint8_t tx_packet[PACKET_BUFFER_BYTES] __attribute__((aligned(64)));
 static uint8_t rx_packet[PACKET_BUFFER_BYTES] __attribute__((aligned(64)));
 static uint8_t tile_payload[PACKET_BUFFER_BYTES - CNN_DMA_PACKET_HEADER_BYTES]
     __attribute__((aligned(64)));
 static uint8_t *const workspace = (uint8_t *)(UINTPTR)CNN_WORKSPACE_BASE;
+static XScuGic interrupt_controller;
+static struct cnn_interrupt_state interrupt_state;
 
 static inline void cnn_write(uint32_t offset, uint32_t value)
 {
@@ -84,6 +95,9 @@ static void print_performance_snapshot(uint16_t layer_count)
                cnn_read(CNN_REG_PERF_OUTPUT_BACKPRESSURE),
                cnn_read(CNN_REG_PERF_INPUT_BYTES),
                cnn_read(CNN_REG_PERF_OUTPUT_BYTES));
+    xil_printf(" perf issued_macs=0x%08x%08x\r\n",
+               cnn_read(CNN_REG_PERF_ISSUED_MACS_HI),
+               cnn_read(CNN_REG_PERF_ISSUED_MACS_LO));
     for (uint16_t layer = 0; layer < layer_count; ++layer) {
         xil_printf(" perf layer[%u]=%u cycles\r\n", layer,
                    cnn_read(CNN_REG_PERF_LAYER0_CYCLES + 4U * layer));
@@ -100,18 +114,67 @@ static inline uint32_t dma_read(uint32_t offset)
     return Xil_In32(DMA_BASE + offset);
 }
 
-static int dma_wait(uint32_t status_offset)
+static void cnn_interrupt_handler(void *reference)
 {
-    for (uint32_t count = 0; count < POLL_TIMEOUT; ++count) {
-        uint32_t status = dma_read(status_offset);
-        if ((status & DMA_SR_ERR_ALL) != 0U) {
-            xil_printf("[FAIL] DMA error status=0x%08x\r\n", status);
-            return -1;
-        }
-        if ((status & DMA_SR_IOC_IRQ) != 0U)
-            return 0;
-    }
-    xil_printf("[FAIL] DMA timeout status=0x%08x\r\n",
+    struct cnn_interrupt_state *state = reference;
+    uint32_t status = cnn_read(CNN_REG_IRQ_STATUS);
+    cnn_write(CNN_REG_IRQ_STATUS, status);
+    cnn_interrupt_accelerator(state, status);
+}
+
+static void dma_mm2s_interrupt_handler(void *reference)
+{
+    struct cnn_interrupt_state *state = reference;
+    uint32_t status = dma_read(DMA_MM2S_DMASR);
+    dma_write(DMA_MM2S_DMASR, status & DMA_SR_IRQ_ALL);
+    cnn_interrupt_dma_tx(state, status);
+}
+
+static void dma_s2mm_interrupt_handler(void *reference)
+{
+    struct cnn_interrupt_state *state = reference;
+    uint32_t status = dma_read(DMA_S2MM_DMASR);
+    dma_write(DMA_S2MM_DMASR, status & DMA_SR_IRQ_ALL);
+    cnn_interrupt_dma_rx(state, status);
+}
+
+static int interrupt_setup(void)
+{
+    XScuGic_Config *config =
+        XScuGic_LookupConfig(XPAR_XSCUGIC_0_BASEADDR);
+    if (config == NULL || XScuGic_CfgInitialize(
+            &interrupt_controller, config, config->CpuBaseAddress) != XST_SUCCESS)
+        return -1;
+    cnn_interrupt_init(&interrupt_state);
+    Xil_ExceptionInit();
+    Xil_ExceptionRegisterHandler(
+        XIL_EXCEPTION_ID_INT, (Xil_ExceptionHandler)XScuGic_InterruptHandler,
+        &interrupt_controller);
+    if (XScuGic_Connect(&interrupt_controller, CNN_INTERRUPT_ID,
+                        cnn_interrupt_handler, &interrupt_state) != XST_SUCCESS ||
+        XScuGic_Connect(&interrupt_controller, DMA_MM2S_INTERRUPT_ID,
+                        dma_mm2s_interrupt_handler, &interrupt_state) !=
+            XST_SUCCESS ||
+        XScuGic_Connect(&interrupt_controller, DMA_S2MM_INTERRUPT_ID,
+                        dma_s2mm_interrupt_handler, &interrupt_state) !=
+            XST_SUCCESS)
+        return -1;
+    XScuGic_Enable(&interrupt_controller, CNN_INTERRUPT_ID);
+    XScuGic_Enable(&interrupt_controller, DMA_MM2S_INTERRUPT_ID);
+    XScuGic_Enable(&interrupt_controller, DMA_S2MM_INTERRUPT_ID);
+    cnn_write(CNN_REG_IRQ_STATUS, CNN_IRQ_DONE | CNN_IRQ_ERROR);
+    cnn_write(CNN_REG_IRQ_ENABLE, CNN_IRQ_DONE | CNN_IRQ_ERROR);
+    Xil_ExceptionEnable();
+    return 0;
+}
+
+static int dma_wait(uint32_t status_offset, uint32_t event)
+{
+    int result = cnn_interrupt_wait(&interrupt_state, event, POLL_TIMEOUT);
+    if (result == CNN_INTERRUPT_OK)
+        return 0;
+    xil_printf("[FAIL] DMA %s status=0x%08x\r\n",
+               result == CNN_INTERRUPT_DEVICE_ERROR ? "error" : "timeout",
                dma_read(status_offset));
     return -1;
 }
@@ -123,8 +186,10 @@ static int dma_reset(void)
     for (uint32_t count = 0; count < POLL_TIMEOUT; ++count) {
         if (((dma_read(DMA_MM2S_DMACR) | dma_read(DMA_S2MM_DMACR)) &
              DMA_CR_RESET) == 0U) {
-            dma_write(DMA_MM2S_DMACR, DMA_CR_RUNSTOP);
-            dma_write(DMA_S2MM_DMACR, DMA_CR_RUNSTOP);
+            dma_write(DMA_MM2S_DMACR, DMA_CR_RUNSTOP |
+                      DMA_CR_IOC_IRQ_ENABLE | DMA_CR_ERROR_IRQ_ENABLE);
+            dma_write(DMA_S2MM_DMACR, DMA_CR_RUNSTOP |
+                      DMA_CR_IOC_IRQ_ENABLE | DMA_CR_ERROR_IRQ_ENABLE);
             return 0;
         }
     }
@@ -133,15 +198,19 @@ static int dma_reset(void)
 
 static int dma_send(const void *data, uint32_t size)
 {
+    cnn_interrupt_discard(&interrupt_state, CNN_INTERRUPT_DMA_TX_DONE |
+                          CNN_INTERRUPT_DMA_ERROR);
     Xil_DCacheFlushRange((UINTPTR)data, size);
     dma_write(DMA_MM2S_DMASR, DMA_SR_IRQ_ALL);
     dma_write(DMA_MM2S_SA, (uint32_t)(UINTPTR)data);
     dma_write(DMA_MM2S_LENGTH, size);
-    return dma_wait(DMA_MM2S_DMASR);
+    return dma_wait(DMA_MM2S_DMASR, CNN_INTERRUPT_DMA_TX_DONE);
 }
 
 static void dma_receive_start(void *data, uint32_t size)
 {
+    cnn_interrupt_discard(&interrupt_state, CNN_INTERRUPT_DMA_RX_DONE |
+                          CNN_INTERRUPT_DMA_ERROR);
     memset(data, 0xA5, size);
     Xil_DCacheFlushRange((UINTPTR)data, size);
     dma_write(DMA_S2MM_DMASR, DMA_SR_IRQ_ALL);
@@ -151,7 +220,7 @@ static void dma_receive_start(void *data, uint32_t size)
 
 static int dma_receive_finish(void *data, uint32_t size)
 {
-    if (dma_wait(DMA_S2MM_DMASR) != 0)
+    if (dma_wait(DMA_S2MM_DMASR, CNN_INTERRUPT_DMA_RX_DONE) != 0)
         return -1;
     Xil_DCacheInvalidateRange((UINTPTR)data, size);
     return 0;
@@ -384,6 +453,8 @@ static int run_model(const struct cnn_model_view *model, const uint8_t *input_da
             return -1;
     }
 
+    cnn_interrupt_discard(&interrupt_state, CNN_INTERRUPT_ACCEL_DONE |
+                          CNN_INTERRUPT_ACCEL_ERROR);
     cnn_write(CNN_REG_JOB_ID, job_id);
     cnn_write(CNN_REG_CONTROL, CNN_CONTROL_START);
     for (uint16_t index = 0; index < model->layer_count; ++index) {
@@ -415,15 +486,10 @@ static int run_model(const struct cnn_model_view *model, const uint8_t *input_da
                 return -1;
         }
     }
-    for (uint32_t count = 0; count < POLL_TIMEOUT; ++count) {
-        uint32_t status = cnn_read(CNN_REG_STATUS);
-        if ((status & CNN_STATUS_ERROR) != 0U) {
-            print_structured_error();
-            return -1;
-        }
-        if ((status & CNN_STATUS_DONE) != 0U)
-            return 0;
-    }
+    if (cnn_interrupt_wait(&interrupt_state, CNN_INTERRUPT_ACCEL_DONE,
+                           POLL_TIMEOUT) == CNN_INTERRUPT_OK)
+        return 0;
+    print_structured_error();
     return -1;
 }
 
@@ -449,7 +515,7 @@ int main(void)
     }
     cnn_write(CNN_REG_CONTROL, CNN_CONTROL_CLEAR);
     cnn_write(CNN_REG_MODEL_COMMAND, CNN_MODEL_COMMAND_CLEAR_ERROR);
-    if (dma_reset() != 0 || activate_model(&model) != 0 ||
+    if (interrupt_setup() != 0 || dma_reset() != 0 || activate_model(&model) != 0 ||
         run_model(&model, cnn_demo_input, sizeof(cnn_demo_input),
                   DEMO_JOB_ID) != 0 ||
         cnn_model_tensor(&model, model.output_tensor_id, &output) !=

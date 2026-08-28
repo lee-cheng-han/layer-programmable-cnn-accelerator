@@ -226,7 +226,7 @@ Source evidence:
 | `0x014` | `PARAMETER_LAYER` | Descriptor selected for parameter loading |
 | `0x018`-`0x038` | `MODEL_*`, `METADATA_*` | Metadata loading, validation, atomic activation, and model identity |
 | `0x03C`-`0x068` | `RUNTIME_*`, `ACTIVE_*`, `COMPLETED_*` | Error, tensor, tile, parameter-bank, DDR, and saturation context |
-| `0x080`-`0x0AC` | `PERF_*` | Job, compute, byte, saturation, and stall counters |
+| `0x080`-`0x0B4` | `PERF_*` | Job, compute, byte, saturation, stall, and issued-MAC counters |
 | `0x0C0`-`0x0DC` | `PERF_LAYERn_CYCLES` | Per-layer controller ownership cycles |
 | `0x0FC` | `VERSION` | Interface version (`0x00050001`) |
 | `0x100`-`0x17C` | `CAPABILITY_*` | Versioned implementation capability record |
@@ -234,7 +234,9 @@ Source evidence:
 
 The complete software contract is documented in
 [register_map.md](docs/register_map.md) and
-[performance_counters.md](docs/performance_counters.md).
+[performance_counters.md](docs/performance_counters.md). The programmable
+snapshot includes a 64-bit issued-MAC count derived from actual engine issue
+events and active channel-lane masks.
 
 ### Tensor Stream Protocol
 

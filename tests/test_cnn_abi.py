@@ -1,4 +1,5 @@
 import dataclasses
+import json
 from pathlib import Path
 import re
 import struct
@@ -218,6 +219,38 @@ class TestCnnAbi(unittest.TestCase):
         sv_package = (root / "rtl/include/cnn_accel_abi_constants.svh").read_text()
         self.assertIn(f"0x{REGISTER_MAP_VERSION:08X}u", c_header)
         self.assertIn(f"32'h{REGISTER_MAP_VERSION:08X}", sv_package)
+
+    def test_generated_record_layouts_match_schema_in_every_language(self):
+        root = Path(__file__).resolve().parents[1]
+        schema = json.loads((root / "abi/cnn_accel_v1.json").read_text())
+        python_constants = (
+            root / "models/cnn_abi_constants.py"
+        ).read_text()
+        c_header = (
+            root / "software/zynq_baremetal/cnn_accel_abi_constants.h"
+        ).read_text()
+        sv_constants = (
+            root / "rtl/include/cnn_accel_abi_constants.svh"
+        ).read_text()
+        for record, fields in schema["record_fields"].items():
+            for field, (offset, size) in fields.items():
+                stem = f"{record}_{field}"
+                self.assertRegex(python_constants, rf"(?m)^{stem}_OFS = {offset}$")
+                self.assertRegex(python_constants, rf"(?m)^{stem}_SIZE = {size}$")
+                self.assertIn(
+                    f"#define CNN_{stem}_OFS 0x{offset:03X}u", c_header
+                )
+                self.assertIn(
+                    f"#define CNN_{stem}_SIZE 0x{size:03X}u", c_header
+                )
+                self.assertIn(
+                    f"localparam int unsigned {stem}_OFS = {offset};",
+                    sv_constants,
+                )
+                self.assertIn(
+                    f"localparam int unsigned {stem}_SIZE = {size};",
+                    sv_constants,
+                )
 
     def test_complete_valid_model(self):
         validate_model(*valid_model())

@@ -31,6 +31,22 @@ def validate(schema: dict) -> None:
             raise ValueError(f"record size {name} must be positive")
         if name != "postprocess_entry" and size % alignment:
             raise ValueError(f"record size {name} must be {alignment}-byte aligned")
+    record_sizes = {
+        "MH": schema["record_sizes"]["model_header"],
+        "LD": schema["record_sizes"]["layer_descriptor"],
+        "TD": schema["record_sizes"]["tensor_descriptor"],
+        "QD": schema["record_sizes"]["quant_descriptor"],
+        "CAP": schema["record_sizes"]["capability_record"],
+        "ERR": schema["record_sizes"]["error_record"],
+    }
+    if set(schema["record_fields"]) != set(record_sizes):
+        raise ValueError("record_fields must describe every generated record")
+    for record, fields in schema["record_fields"].items():
+        for field, layout in fields.items():
+            if len(layout) != 2 or layout[0] < 0 or layout[1] <= 0:
+                raise ValueError(f"invalid field layout {record}.{field}")
+            if layout[0] + layout[1] > record_sizes[record]:
+                raise ValueError(f"field layout exceeds {record}: {field}")
 
 
 def values(schema: dict) -> dict[str, int]:
@@ -67,6 +83,11 @@ def py_text(schema: dict) -> str:
     for name, value in values(schema).items():
         lines.append(f"{name} = {value:#x}" if value >= 65536 else f"{name} = {value}")
     lines += ["BIAS_BANK_CAPACITY_BYTES = POSTPROCESS_BANK_CAPACITY_BYTES", ""]
+    for record, fields in schema["record_fields"].items():
+        for field, (offset, size) in fields.items():
+            lines.append(f"{record}_{field}_OFS = {offset}")
+            lines.append(f"{record}_{field}_SIZE = {size}")
+    lines.append("")
     for name, value in schema["registers"].items():
         lines.append(f"REG_{name} = 0x{value:03X}")
     lines.append("")
@@ -93,6 +114,11 @@ def c_text(schema: dict) -> str:
         "#define CNN_BIAS_BANK_CAPACITY_BYTES CNN_POSTPROCESS_BANK_CAPACITY_BYTES",
         "",
     ]
+    for record, fields in schema["record_fields"].items():
+        for field, (offset, size) in fields.items():
+            lines.append(f"#define CNN_{record}_{field}_OFS 0x{offset:03X}u")
+            lines.append(f"#define CNN_{record}_{field}_SIZE 0x{size:03X}u")
+    lines.append("")
     for name, value in schema["registers"].items():
         lines.append(f"#define CNN_REG_{name:<35} 0x{value:03X}u")
     lines.append("")
@@ -123,6 +149,11 @@ def sv_text(schema: dict) -> str:
         else:
             lines.append(f"localparam int unsigned {target} = {value};")
     lines.append("localparam int unsigned BIAS_BANK_CAPACITY_BYTES = POSTPROCESS_BANK_CAPACITY_BYTES;")
+    lines.append("")
+    for record, fields in schema["record_fields"].items():
+        for field, (offset, size) in fields.items():
+            lines.append(f"localparam int unsigned {record}_{field}_OFS = {offset};")
+            lines.append(f"localparam int unsigned {record}_{field}_SIZE = {size};")
     lines.append("")
     for name, value in schema["registers"].items():
         lines.append(f"localparam logic [11:0] REG_{name} = 12'h{value:03X};")

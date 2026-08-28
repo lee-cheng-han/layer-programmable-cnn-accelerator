@@ -13,6 +13,61 @@
     "record_alignment": 64,
     "postprocess_entry": 16
   },
+  "record_fields": {
+    "MH": {
+      "PACKAGE_SIZE": [8, 4],
+      "LAYER_COUNT": [24, 2],
+      "LAYER_TABLE": [32, 4],
+      "TENSOR_TABLE": [36, 4],
+      "QUANT_TABLE": [40, 4],
+      "PARAMETER_DATA": [44, 4],
+      "PACKAGE_CRC32": [56, 4],
+      "INPUT_TENSOR_ID": [60, 2],
+      "PACKAGE_SHA256": [64, 32]
+    },
+    "LD": {
+      "LAYER_ID": [4, 2],
+      "INPUT_TENSOR_ID": [12, 2],
+      "WEIGHT_OFFSET": [20, 4],
+      "PARAMETER_CRC32": [36, 4],
+      "GEOMETRY": [40, 12],
+      "TILE_HINT": [52, 4]
+    },
+    "TD": {
+      "TENSOR_ID": [4, 2],
+      "DDR_OFFSET": [8, 8],
+      "WIDTH": [20, 2],
+      "ROW_STRIDE": [36, 4]
+    },
+    "QD": {
+      "QUANTIZATION_ID": [4, 2],
+      "CHANNEL_COUNT": [8, 2],
+      "ROUNDING_MODE": [10, 1],
+      "OUTPUT_ZERO_POINT": [11, 1],
+      "CHANNEL_PARAMS": [64, 128],
+      "CHANNEL_PARAM": [0, 8]
+    },
+    "CAP": {
+      "HARDWARE_VERSION": [4, 4],
+      "MODEL_ABI_VERSION": [8, 2],
+      "FEATURE_FLAGS": [12, 4],
+      "LIMITS": [44, 20],
+      "MAX_TENSOR_ELEMENTS": [64, 4],
+      "BANK_CAPACITY": [68, 16],
+      "PARALLELISM": [88, 4],
+      "CLOCK_HZ": [92, 4]
+    },
+    "ERR": {
+      "CODE": [4, 4],
+      "CONTEXT": [8, 4],
+      "RECORD_INDEX": [12, 4],
+      "OBSERVED": [16, 8],
+      "EXPECTED_MIN": [24, 8],
+      "EXPECTED_MAX": [32, 8],
+      "MODEL_ID": [40, 8],
+      "DETAIL": [48, 4]
+    }
+  },
   "limits": {
     "layers": 8,
     "tensors": 32,
@@ -65,6 +120,8 @@
     "PERF_COMPLETED_LAYERS": 164,
     "PERF_COMPLETED_TILES": 168,
     "PERF_STATUS": 172,
+    "PERF_ISSUED_MACS_LO": 176,
+    "PERF_ISSUED_MACS_HI": 180,
     "PERF_LAYER0_CYCLES": 192,
     "PERF_LAYER1_CYCLES": 196,
     "PERF_LAYER2_CYCLES": 200,

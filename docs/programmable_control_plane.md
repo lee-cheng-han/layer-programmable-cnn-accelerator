@@ -39,7 +39,7 @@ little-endian, and naturally aligned.
 | `0x058`-`0x05C` | `INPUT_DDR` | R | active input tensor DDR offset |
 | `0x060`-`0x064` | `OUTPUT_DDR` | R | active output tensor DDR offset |
 | `0x068` | `SATURATION_EVENTS` | R | requantization and residual INT8 clipping events in the active job |
-| `0x080`-`0x0AC` | `PERF_*` | R | retained job, compute, stall, byte, saturation, and completion snapshot |
+| `0x080`-`0x0B4` | `PERF_*` | R | retained job, compute, stall, byte, saturation, issued-MAC, and completion snapshot |
 | `0x0C0`-`0x0DC` | `PERF_LAYERn_CYCLES` | R | controller ownership cycles for layers 0-7 |
 | `0x0FC` | `VERSION` | R | `0x00050001` |
 | `0x180`-`0x1BC` | `STRUCTURED_ERROR` | R | sticky 64-byte first-fault record |

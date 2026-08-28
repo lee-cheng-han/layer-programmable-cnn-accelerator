@@ -88,6 +88,8 @@ module cnn_programmable_system_top #(
   logic perf_compute_active;
   logic perf_parameter_stall;
   logic perf_input_starved;
+  logic perf_mac_issue_valid;
+  logic [15:0] perf_mac_issue_count;
   logic [4:0] performance_word_index;
   logic [31:0] performance_word_data;
   logic [4:0] structured_error_word_index;
@@ -211,6 +213,8 @@ module cnn_programmable_system_top #(
     .clk(aclk), .rst_n(aresetn), .clear(clear_pulse),
     .job_start(start_pulse && !busy), .job_done(done), .job_error(error),
     .controller_active(busy), .compute_active(perf_compute_active),
+    .mac_issue_valid(perf_mac_issue_valid),
+    .mac_issue_count(perf_mac_issue_count),
     .active_layer(active_layer), .parameter_stall(perf_parameter_stall),
     .input_starved(perf_input_starved),
     .input_valid(s_axis_tvalid), .input_ready(s_axis_tready),
@@ -266,6 +270,8 @@ module cnn_programmable_system_top #(
     .layer_done(layer_done), .perf_compute_active(perf_compute_active),
     .perf_parameter_stall(perf_parameter_stall),
     .perf_input_starved(perf_input_starved),
+    .perf_mac_issue_valid(perf_mac_issue_valid),
+    .perf_mac_issue_count(perf_mac_issue_count),
     .busy(busy), .done(done), .error(error),
     .error_code(error_code), .error_source(error_source),
     .error_layer(error_layer),

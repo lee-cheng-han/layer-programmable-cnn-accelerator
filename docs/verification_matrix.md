@@ -9,7 +9,7 @@
 | model | `tests/test_image2image_int8.py` | Passing | bit-accurate Python integer model coverage |
 | default parameters | Gaussian impulse-response test | Passing | all 16 hidden channels used; residual output matches the expected 3x3 low-pass kernel |
 | golden generation | `make baremetal-headers` | Passing | writes deterministic tensors and C DMA packet header |
-| software runtime corpus | `make runtime-corpus-test` | Passing | 24 seeded packages, 1-8 layers, 108 total layers, and 2,792 tiles cross-check compiler packages against the C ABI, tile, packet, and workspace runtime |
+| software runtime corpus | `make runtime-corpus-test` | Passing | 72 packages across three retained seeds cover 1-8 layers per seed and cross-check compiler packages against the C ABI, tile, packet, corruption-rejection, and workspace runtime |
 | package-to-RTL numeric flow | `make randomized-package-rtl-test` | Passing | seeded compiler package drives four mixed layers, 26 halo tiles, two-bank parameter recycling, randomized output backpressure, and 268 exact golden packet beats |
 | UVM environment | `make uvm-u5` | 23/23 cases pass; functional target closed | Functional coverage is 96.72% against a 95% target; both AXI-Stream interface groups reach 100%. Fresh code scores are unavailable because XSim 2025.2 crashes after creating the merged code database but before emitting HTML; assertion coverage remains unmeasured |
 | UVM channel scope | `verification/uvm_signoff.json` | Explicit | Fast randomized regression uses PC=2/PK=2 and 1-2 channels; dedicated parameterized RTL and implementation flows carry the separate 16-channel capacity obligation |

@@ -601,6 +601,8 @@ module multi_layer_job_controller #(
     .output_pixel_data(scheduler_output_pixel_data),
     .output_pixel_last(scheduler_output_pixel_last),
     .output_pixel_saturation_count(),
+    .mac_issue_valid(),
+    .mac_issue_count(),
     .current_x(),
     .current_y(),
     .busy(),

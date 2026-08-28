@@ -11,6 +11,8 @@ module cnn_programmable_performance_counters #(
   input  logic job_error,
   input  logic controller_active,
   input  logic compute_active,
+  input  logic mac_issue_valid,
+  input  logic [15:0] mac_issue_count,
   input  logic [2:0] active_layer,
   input  logic parameter_stall,
   input  logic input_starved,
@@ -35,6 +37,7 @@ module cnn_programmable_performance_counters #(
   logic [31:0] output_backpressure_cycles;
   logic [31:0] input_bytes;
   logic [31:0] output_bytes;
+  logic [63:0] issued_macs;
   logic [31:0] layer_cycles [MAX_LAYERS];
 
   function automatic logic [2:0] keep_bytes(input logic [3:0] keep);
@@ -53,6 +56,7 @@ module cnn_programmable_performance_counters #(
       output_backpressure_cycles <= '0;
       input_bytes <= '0;
       output_bytes <= '0;
+      issued_macs <= '0;
       for (int layer = 0; layer < MAX_LAYERS; layer++) begin
         layer_cycles[layer] <= '0;
       end
@@ -66,6 +70,7 @@ module cnn_programmable_performance_counters #(
       output_backpressure_cycles <= '0;
       input_bytes <= '0;
       output_bytes <= '0;
+      issued_macs <= '0;
       for (int layer = 0; layer < MAX_LAYERS; layer++) begin
         layer_cycles[layer] <= '0;
       end
@@ -79,6 +84,8 @@ module cnn_programmable_performance_counters #(
         end
       end
       if (compute_active) compute_cycles <= compute_cycles + 32'd1;
+      if (mac_issue_valid)
+        issued_macs <= issued_macs + 64'(mac_issue_count);
       if (parameter_stall)
         parameter_stall_cycles <= parameter_stall_cycles + 32'd1;
       if (input_starved)
@@ -107,6 +114,8 @@ module cnn_programmable_performance_counters #(
       5'd9: word_data = completed_layers;
       5'd10: word_data = completed_tiles;
       5'd11: word_data = {31'd0, counting};
+      5'd12: word_data = issued_macs[31:0];
+      5'd13: word_data = issued_macs[63:32];
       default: begin
         word_data = 32'd0;
         for (int layer = 0; layer < MAX_LAYERS; layer++) begin

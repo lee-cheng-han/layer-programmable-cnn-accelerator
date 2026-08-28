@@ -62,10 +62,17 @@ make baremetal-runtime-test
 make runtime-corpus-test
 ```
 
-`runtime-corpus-test` compiles and bit-accurately executes 24 deterministic
-mixed networks in Python, then drives every generated package through the C
+`runtime-corpus-test` compiles and bit-accurately executes 72 deterministic
+mixed networks across three retained seeds in Python, then drives every
+generated package through the C
 descriptor parser, parameter validation, tile planner, NHWC gather/scatter,
 packed packet codec, corruption rejection, and exact output-tile coverage.
+
+The board application configures the Zynq-7000 GIC for the CNN runtime and both
+AXI DMA channels. MM2S, S2MM, and final accelerator completion use retained
+interrupt events with W1C acknowledgement, bounded waits, and error precedence.
+The portable event layer is host-tested by `make baremetal-runtime-test`;
+parameter-bank and active-layer progression remain polling-based.
 
 After the implemented Zybo XSA exists, build the target ELF with:
 

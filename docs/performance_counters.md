@@ -60,6 +60,7 @@ retains it after completion or failure:
 | Output backpressure | Output `TVALID && !TREADY` cycles |
 | Input/output bytes | Exact accepted `TKEEP` byte lanes, including packet headers |
 | Saturation events | Requantization and residual INT8 clipping events |
+| Issued MACs | Exact active input-lane by output-lane products accepted by the MAC arrays |
 | Per-layer cycles | Controller ownership time for each of up to eight layers |
 
 | Offset | Counter |
@@ -76,10 +77,11 @@ retains it after completion or failure:
 | `0x0A4` | completed layers |
 | `0x0A8` | completed tiles |
 | `0x0AC` | bit 0: snapshot currently counting |
+| `0x0B0`-`0x0B4` | issued MAC count, little-endian 64-bit low/high words |
 | `0x0C0`-`0x0DC` | layer 0 through layer 7 cycles |
 
 Saturation counters increment once per clipped tensor element, not once per
 cycle. The bare-metal bring-up application prints job, controller, compute,
-stall, byte, and per-layer cycle values after a passing run. Actual MAC issue
-counting remains a separate refinement: it must use the compute engines' valid
-and lane-mask signals rather than a geometry-derived estimate.
+stall, byte, issued-MAC, and per-layer cycle values after a passing run. MACs
+are counted at each engine issue event using the active input and output lane
+masks, so channel tails contribute only useful lane products.

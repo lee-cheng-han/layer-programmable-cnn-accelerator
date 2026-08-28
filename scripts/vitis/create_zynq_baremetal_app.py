@@ -57,12 +57,17 @@ src_runtime = root / "software" / "zynq_baremetal" / "cnn_programmable_runtime.c
 dst_runtime = app_src_dir / "cnn_programmable_runtime.c"
 src_runtime_header = root / "software" / "zynq_baremetal" / "cnn_programmable_runtime.h"
 dst_runtime_header = app_src_dir / "cnn_programmable_runtime.h"
+src_interrupt_runtime = root / "software" / "zynq_baremetal" / "cnn_interrupt_runtime.c"
+dst_interrupt_runtime = app_src_dir / "cnn_interrupt_runtime.c"
+src_interrupt_header = root / "software" / "zynq_baremetal" / "cnn_interrupt_runtime.h"
+dst_interrupt_header = app_src_dir / "cnn_interrupt_runtime.h"
 dst_hello = app_src_dir / "helloworld.c"
 user_config = app_src_dir / "UserConfig.cmake"
 hello_cmake = app_src_dir / "Hello_worldExample.cmake"
 cmake_file = app_src_dir / "CMakeLists.txt"
 
-for source in (src_main, src_abi_header, src_runtime, src_runtime_header):
+for source in (src_main, src_abi_header, src_runtime, src_runtime_header,
+               src_interrupt_runtime, src_interrupt_header):
     if not source.exists():
         raise FileNotFoundError(f"Missing source file: {source}")
 
@@ -70,6 +75,8 @@ shutil.copyfile(src_main, dst_main)
 shutil.copyfile(src_abi_header, dst_abi_header)
 shutil.copyfile(src_runtime, dst_runtime)
 shutil.copyfile(src_runtime_header, dst_runtime_header)
+shutil.copyfile(src_interrupt_runtime, dst_interrupt_runtime)
+shutil.copyfile(src_interrupt_header, dst_interrupt_header)
 
 src_generated = root / "software" / "zynq_baremetal" / "generated"
 dst_generated = app_src_dir / "generated"
@@ -85,7 +92,10 @@ else:
 
 if user_config.exists():
     text = user_config.read_text()
-    text = text.replace('"helloworld.c"', '"main.c" "cnn_programmable_runtime.c"')
+    text = text.replace(
+        '"helloworld.c"',
+        '"main.c" "cnn_programmable_runtime.c" "cnn_interrupt_runtime.c"',
+    )
     user_config.write_text(text)
 else:
     raise FileNotFoundError(f"Missing Vitis source config: {user_config}")
